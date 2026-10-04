@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "project-kit",
+  "description": "project-kit: a production-grade build workflow for Claude Code across stacks.",
+  "owner": {
+    "name": "soumabali"
+  },
+  "plugins": [
+    {
+      "name": "project-kit",
+      "source": "./",
+      "description": "Resumable task tracking, test-first builds with real E2E tests, design-to-UI fidelity, security gates, and releases for any stack, including Claude Code skills and plugins and MCP servers and clients.",
+      "category": "development",
+      "tags": [
+        "workflow",
+        "testing",
+        "playwright",
+        "design",
+        "security",
+        "release"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# Hook and helper scripts must keep LF endings on every machine, or bash fails with syntax errors.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.zip binary

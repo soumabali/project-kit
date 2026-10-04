@@ -1,0 +1,41 @@
+{
+  "description": "Permission rules every project-kit install before 1.1.0 merged into .claude/settings.json. Those manifests do not record what the kit offered, so sync treats these rules as already offered and never re-adds one the project removed. Do not edit.",
+  "deny": [
+    "Read(.env)",
+    "Read(.env.*)",
+    "Read(*.pem)",
+    "Read(*.key)",
+    "Read(*.p12)",
+    "Read(*.pfx)",
+    "Read(*.keystore)",
+    "Read(*.jks)",
+    "Read(id_rsa*)",
+    "Read(id_ed25519*)",
+    "Read(secrets/**)",
+    "Read(**/credentials*.json)",
+    "Read(**/service-account*.json)",
+    "Bash(git commit *--no-verify*)",
+    "Bash(git push *--no-verify*)",
+    "Bash(git push *--force*)",
+    "Bash(git push * -f*)",
+    "Read(!.env.example)"
+  ],
+  "ask": [
+    "Bash(git push *)",
+    "Bash(git reset --hard*)",
+    "Bash(git clean *)",
+    "Bash(rm -rf *)",
+    "Bash(*migrate:fresh*)",
+    "Bash(*migrate:reset*)",
+    "Bash(*db:wipe*)",
+    "Bash(*db:drop*)",
+    "Bash(*db:reset*)",
+    "Bash(*prisma migrate reset*)",
+    "Bash(*flyway clean*)",
+    "Bash(*down -v*)",
+    "Bash(*down --volumes*)",
+    "Bash(*terraform apply*)",
+    "Bash(*terraform destroy*)",
+    "Bash(*kubectl delete*)"
+  ]
+}

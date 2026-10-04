@@ -1,0 +1,35 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Claude Code eval results and local settings
+evals/results/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+credentials.json
+
+# Logs and temp files
+*.log
+npm-debug.log*
+*.tmp
+*.orig
+*.rej
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

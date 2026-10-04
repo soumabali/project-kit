@@ -1,0 +1,68 @@
+# Copy to .github/workflows/ci.yml, with templates/run.sh as tests/run.sh. Validates the plugins and runs the tests on
+# every change; evals run only when started by hand (Actions → ci → Run workflow) because they call the model with
+# your API key.
+# Actions are pinned to full commit SHAs (version in the comment); let Dependabot or Renovate keep them current.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      evals:
+        description: Run the eval suite (uses the ANTHROPIC_API_KEY secret)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CLAUDE_CODE_VERSION: "2.1.287" # the Claude Code you tested with; bump it on purpose
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Validate and test
+        run: bash tests/run.sh
+
+  evals:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.evals }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Pin both models so a model release isn't mistaken for a plugin regression.
+          EVAL_MODEL: claude-sonnet-5-5
+          JUDGE_MODEL: claude-haiku-4-5-20251001
+        run: >-
+          claude plugin eval . --trust-plugin --model "$EVAL_MODEL" --judge-model "$JUDGE_MODEL"
+          --max-cost-usd 5 --no-publish --json evals/results/ci.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: eval-results
+          path: evals/results/
+          retention-days: 14

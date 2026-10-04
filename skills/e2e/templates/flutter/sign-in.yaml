@@ -1,0 +1,13 @@
+# .maestro/sign-in.yaml: black-box journey for Android or iOS emulators.
+# Run: maestro test -e E2E_USER_EMAIL=… -e E2E_USER_PASSWORD=… .maestro/sign-in.yaml
+# Replace appId with the app's application id or bundle id, and the labels with the app's real ones.
+appId: com.example.app
+---
+- launchApp:
+    clearState: true
+- tapOn: "Email"
+- inputText: ${E2E_USER_EMAIL}
+- tapOn: "Password"
+- inputText: ${E2E_USER_PASSWORD}
+- tapOn: "Sign in"
+- assertVisible: "Home"

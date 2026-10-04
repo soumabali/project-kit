@@ -1,0 +1,44 @@
+# Runs the kit's self-test suite on Linux and macOS. Actions are pinned to full commit SHAs (version in the comment)
+# and tools to exact versions; let Dependabot or Renovate propose updates.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install test tools
+        run: |
+          python -m pip install pillow==12.3.0
+          npm install -g @anthropic-ai/claude-code@2.1.287
+      # The git guard's tokenizer runs in whatever awk a machine has; test the common ones (macOS brings its own).
+      - name: Install other awk implementations
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gawk original-awk busybox
+      - name: Self-test
+        run: bash tests/run.sh
+      - name: Release tags carry the real owner and repository
+        if: startsWith(github.ref, 'refs/tags/')
+        run: "! grep -rn CHANGE-ME .claude-plugin README.md LICENSE"
