@@ -6,7 +6,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const GUARD = path.join(root, 'scripts', 'secret-guard.sh');
+const GUARD = path.join(root, 'scripts', 'hooks', 'pre-tool.mjs');
 const j = (...p) => p.join('');
 const r = (n, set = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') =>
   Array.from({ length: n }, (_, i) => set[(i * 7 + 3) % set.length]).join('');
@@ -54,7 +54,7 @@ const cases = [
 ];
 
 const run = (event, env = process.env) =>
-  spawnSync('bash', [GUARD], { input: JSON.stringify(event), encoding: 'utf8', env }).status;
+  spawnSync(process.execPath, [GUARD], { input: JSON.stringify(event), encoding: 'utf8', env }).status;
 const write = (content) => ({ tool_name: 'Write', tool_input: { file_path: '/p/f', content } });
 
 let failures = 0;
@@ -64,7 +64,7 @@ for (const [label, want, content] of cases) {
   check(got === want, `${label}: ${got}, wanted ${want}`);
 }
 
-// Every write path is scanned, and a broken parser scans the raw event instead of nothing.
+// Every write path is scanned.
 const key = j('AKIA', r(16, UP));
 check(run({ tool_name: 'Edit', tool_input: { file_path: '/p/f', old_string: 'a', new_string: `k=${key}` } }) === 2, 'Edit not scanned');
 check(run({ tool_name: 'MultiEdit', tool_input: { file_path: '/p/f', edits: [{ old_string: 'a', new_string: `k=${key}` }] } }) === 2, 'MultiEdit not scanned');
@@ -72,12 +72,6 @@ check(run({ tool_name: 'NotebookEdit', tool_input: { notebook_path: '/p/n.ipynb'
 check(run({ tool_name: 'Bash', tool_input: { command: `cat > .env <<EOF\nAWS_ACCESS_KEY_ID=${key}\nEOF` } }) === 2, 'Bash heredoc not scanned');
 check(run({ tool_name: 'Bash', tool_input: { command: 'npm test' } }) === 0, 'a plain command was blocked');
 check(run({ tool_name: 'Edit', tool_input: { file_path: '/p/f', old_string: `k=${key}`, new_string: 'k=process.env.K' } }) === 0, 'removing a key was blocked');
-const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-bin-'));
-for (const tool of ['jq', 'python3']) {
-  fs.writeFileSync(path.join(fake, tool), '#!/bin/sh\nexit 1\n');
-  fs.chmodSync(path.join(fake, tool), 0o755);
-}
-check(run(write(`k=${key}`), { ...process.env, PATH: `${fake}${path.delimiter}${process.env.PATH}` }) === 2, 'a broken JSON parser let a key through');
-fs.rmSync(fake, { recursive: true, force: true });
+check(run({ tool_name: 'Write', tool_input: { file_path: '/p/f', content: 'crates ' + j('cio', r(32)) } }) === 2, 'crates.io token not caught');
 
 if (failures) { console.error(`  ${failures} guard check(s) failed`); process.exit(1); }

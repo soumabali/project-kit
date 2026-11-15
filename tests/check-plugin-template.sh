@@ -107,6 +107,7 @@ if (bad.length) { console.error(bad.map(b => `    ${b}`).join('\n')); process.ex
 EOF
 }
 eval_keys_ok "$T/evals" || problem "the eval templates use keys or settings claude plugin eval doesn't accept"
+eval_keys_ok "$(cd "$(dirname "$0")/.." && pwd)/evals" || problem "the kit's own evals use keys claude plugin eval doesn't accept"
 mkdir -p "$W/bad-evals/case/graders"
 printf -- '---\nmax_turn: 5\nenv:\n  TOKEN: x\n---\nHi\n' > "$W/bad-evals/case/prompt.md"
 printf -- '---\ntype: tool_used\ntool: Skill\n---\n' > "$W/bad-evals/case/graders/fired.md"

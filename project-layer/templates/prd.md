@@ -23,9 +23,13 @@ Who has the problem, and what it costs them today.
 - As a <role>, I want <action> so that <outcome>.
   - Given …, when …, then …
 
+## Terms
+Domain words from the client and what they mean here; copy new ones into `06-technical-docs/glossary.md`.
+
 ## User flows and screens
 The main flows step by step, and the screens they touch (ids from `06-technical-docs/design/screens.md`).
-Design source: DESIGN.md, HTML template, mockups, Figma, or "to be designed".
+Design source: DESIGN.md, HTML template, mockups, Figma, or "to be designed". Products the client likes or competes
+with, as references for the direction, and the sample data the screens will show.
 
 ## Data and integrations
 Entities, data owners, external services, data flows.

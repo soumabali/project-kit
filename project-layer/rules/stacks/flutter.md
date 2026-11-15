@@ -5,7 +5,7 @@ paths:
   - "{{APP}}/.maestro/**/*"
   - "{{APP}}/android/app/src/main/AndroidManifest.xml"
   - "{{APP}}/ios/Runner/Info.plist"
-kit: {"name": "Flutter (Dart)", "commands": {"setup": "flutter pub get", "dev": "flutter run", "test": "flutter test", "testOne": "flutter test <file>_test.dart --plain-name \"<name>\"", "lint": "dart format --output=none --set-exit-if-changed .", "types": "flutter analyze", "build": "flutter build appbundle --release --obfuscate --split-debug-info=build/symbols", "audit": "osv-scanner scan source -r ."}}
+kit: {"name": "Flutter (Dart)", "commands": {"setup": "flutter pub get", "dev": "flutter run", "test": "flutter test", "testOne": "flutter test <file>_test.dart --plain-name \"<name>\"", "lint": "dart format --output=none --set-exit-if-changed .", "types": "flutter analyze", "build": "flutter build appbundle --release --obfuscate --split-debug-info=build/symbols", "audit": "osv-scanner scan source -r ."}, "check": {"ext": "dart", "cmd": "dart analyze {file}", "requires": "dart"}}
 ---
 
 # Stack: Flutter (Dart)

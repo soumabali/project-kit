@@ -3,7 +3,7 @@ paths:
   - "{{APP}}/**/*.{ts,js,mjs,cjs,mts,cts}"
   - "{{APP}}/package.json"
   - "{{APP}}/tsconfig*.json"
-kit: {"name": "Node.js and TypeScript service", "commands": {"setup": "pnpm install", "dev": "pnpm dev", "test": "pnpm vitest run", "testOne": "pnpm vitest run -t \"<name>\"", "lint": "pnpm eslint .", "types": "pnpm tsc --noEmit", "build": "pnpm build", "audit": "pnpm audit --audit-level high"}}
+kit: {"name": "Node.js and TypeScript service", "commands": {"setup": "pnpm install", "dev": "pnpm dev", "test": "pnpm vitest run", "testOne": "pnpm vitest run -t \"<name>\"", "lint": "pnpm eslint .", "types": "pnpm tsc --noEmit", "build": "pnpm build", "audit": "pnpm audit --audit-level high"}, "check": {"ext": "ts,mts,cts,js,mjs,cjs", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
 ---
 
 # Stack: Node.js and TypeScript services (NestJS, Fastify, Express, Hono)

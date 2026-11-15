@@ -8,7 +8,7 @@ paths:
   - "{{APP}}/scripts/**/*"
   - "{{APP}}/.mcp.json"
   - "{{APP}}/evals/**/*"
-kit: {"name": "Claude Code skills, agents, hooks, and plugins", "commands": {"dev": "claude --plugin-dir .", "test": "bash tests/run.sh", "testOne": "claude plugin eval . --case \"<name>\" --ablation none", "lint": "claude plugin validate --strict .claude-plugin/plugin.json"}}
+kit: {"name": "Claude Code skills, agents, hooks, and plugins", "commands": {"dev": "claude --plugin-dir .", "test": "bash tests/run.sh", "testOne": "claude plugin eval . --case \"<name>\" --ablation none", "lint": "claude plugin validate --strict .claude-plugin/plugin.json"}, "check": {"ext": "sh", "cmd": "bash -n {file}", "requires": "bash"}}
 ---
 
 # Stack: Claude Code skills, agents, hooks, and plugins

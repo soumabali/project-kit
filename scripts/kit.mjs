@@ -12,6 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LAYER = path.join(PLUGIN_ROOT, 'project-layer');
@@ -22,6 +23,7 @@ const RULES_DIR = '.claude/rules/kit';
 const TEMPLATES_DIR = '.claude/templates';
 const SETTINGS = '.claude/settings.json';
 const SKIP_LIST = 'skipped-projects.txt';
+const GLOSSARY = '06-technical-docs/glossary.md';
 const MAX_AUTO_APPS = 12;
 const SAFE_PATH = /^[\w./@ +-]+$/; // app paths end up inside quoted YAML globs and Markdown tables
 const APP_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
@@ -37,7 +39,7 @@ const FOLDERS = [
 ];
 // The only non-kit files install creates; a manifest naming anything else is refused.
 const CREATABLE = new Set([
-  'CLAUDE.md', '05-progress/STATUS.md', '05-progress/log.md', 'CHANGELOG.md', SETTINGS, '.gitignore', '.gitattributes',
+  'CLAUDE.md', '05-progress/STATUS.md', '05-progress/log.md', 'CHANGELOG.md', '06-technical-docs/glossary.md', SETTINGS, '.gitignore', '.gitattributes',
   ...FOLDERS.map(d => `${d}/.gitkeep`),
 ]);
 const GITIGNORE_HEADER = '# project-kit';
@@ -48,11 +50,15 @@ const GITIGNORE_LINES = [
 ];
 // Two task branches that both append to the log merge without a conflict.
 const GITATTRIBUTES_LINES = ['05-progress/log.md merge=union', 'CHANGELOG.md merge=union'];
-const OPTIONS = ['project-dir', 'data-dir', 'name', 'app', 'autonomy'];
-// guarded: the kit's ask rules prompt before destructive commands. auto: unattended development (for example
-// claude --dangerously-skip-permissions, where ask rules still prompt): no ask rules, and what must never run
-// unattended is denied instead.
+const OPTIONS = ['project-dir', 'data-dir', 'name', 'app', 'autonomy', 'rigor', 'title', 'phase', 'type', 'depends', 'reason', 'cmd', 'ext'];
+// guarded: the command guard asks before destructive commands and Claude asks before risky changes. auto: unattended
+// development; nothing asks, and what must never run unattended is denied. A session can override the project's
+// default with PROJECT_KIT_AUTONOMY, and --dangerously-skip-permissions counts as auto (scripts/lib/project.mjs).
 const AUTONOMY = ['guarded', 'auto'];
+// How much process a project carries (CLAUDE.md "Rigor"). Manifests from before 1.5.0 have none and are production.
+const RIGOR = ['prototype', 'standard', 'production'];
+const rigorOf = m => (RIGOR.includes(m && m.rigor) ? m.rigor : 'production');
+const STATUSES = ['backlog', 'todo', 'in-progress', 'blocked', 'in-review', 'done', 'cancelled'];
 // Files that hold secrets when committed (doctor fails on them); .env.example and similar templates are fine.
 const SECRET_FILE = new RegExp([
   String.raw`(^|/)\.env(\.(?!(example|sample|template|dist|defaults)$)[^/]+)?$`,
@@ -88,7 +94,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith('--')) { args._.push(a); continue; }
     const key = a.slice(2);
-    if (['dry-run', 'force', 'merge-claude-md', 'auto', 'json', 'help'].includes(key)) { args[key] = true; continue; }
+    if (['dry-run', 'force', 'merge-claude-md', 'auto', 'json', 'help', 'security', 'ui', 'off', 'reset', 'parallel'].includes(key)) { args[key] = true; continue; }
     // A mistyped flag must not be skipped: `uninstall --dryrun` would otherwise really uninstall.
     if (!OPTIONS.includes(key)) fail(`unknown option --${key}; run with --help for the list`);
     const val = argv[++i];
@@ -128,9 +134,14 @@ const CORE = loadDir(path.join(LAYER, 'rules', 'core'));
 const KIT_SETTINGS = JSON.parse(read(path.join(LAYER, 'settings.json')));
 // Manifests from before 1.1.0 don't record which permission rules the kit offered; this frozen list stands in.
 const LEGACY_OFFERED = JSON.parse(read(path.join(LAYER, 'legacy-offered-rules.json')));
-// Deny rules that replace the ask rules in auto mode: commands that print secrets or change remote infrastructure.
-const AUTO_DENY = JSON.parse(read(path.join(LAYER, 'settings-auto.json'))).permissions.deny;
+// Rules earlier versions merged into settings and this one no longer uses; sync takes out the ones it recorded adding.
+const RETIRED = JSON.parse(read(path.join(LAYER, 'retired-rules.json')));
 const autonomyOf = m => (AUTONOMY.includes(m && m.autonomy) ? m.autonomy : 'guarded');
+function retiredIn(manifest) {
+  const added = manifest && manifest.settingsAdded;
+  if (!added) return null;
+  return { ask: RETIRED.ask.filter(r => (added.ask || []).includes(r)), deny: RETIRED.deny.filter(r => (added.deny || []).includes(r)) };
+}
 
 function expandApp(pattern, appPath) {
   if (appPath === '.') return pattern.replace('{{APP}}/', '');
@@ -181,7 +192,8 @@ function renderKitFiles(apps) {
 const APP_CONTAINERS = ['07-application', 'apps', 'services', 'packages', 'plugins'];
 const APP_FOLDERS = ['frontend', 'backend', 'web', 'api', 'server', 'client', 'mobile', 'admin', 'site', 'worker', 'e2e'];
 const WORKSPACE_MARKERS = ['pnpm-workspace.yaml', 'turbo.json', 'nx.json', 'lerna.json', 'rush.json'];
-const JS_STACKS = new Set(['nuxt', 'nextjs', 'node-typescript', 'playwright', 'html-css']);
+const JS_STACKS = new Set(['nuxt', 'nextjs', 'vite-spa', 'react-native', 'node-typescript', 'playwright', 'html-css']);
+const SPA_DEPS = ['react', 'vue', 'svelte', 'solid-js', 'preact', '@angular/core', 'lit'];
 // A package.json with one of these is an app or service, not a static template that uses npm for its assets.
 const JS_APP_DEPS = [
   'react', 'vue', 'svelte', '@angular/core', 'preact', 'solid-js', 'lit', 'astro', '@sveltejs/kit', 'express',
@@ -224,6 +236,8 @@ function detectDir(dir, allowHtml, plugin = false) {
   else if (has('pom.xml', 'build.gradle', 'build.gradle.kts')) { if (!android) stack = 'java-spring'; }
   else if (dep('nuxt') || some(/^nuxt\.config\./)) stack = 'nuxt';
   else if (dep('next') || some(/^next\.config\./)) stack = 'nextjs';
+  else if (dep('expo') || dep('react-native')) stack = 'react-native';
+  else if ((dep('vite') || some(/^vite\.config\./)) && SPA_DEPS.some(dep) && !dep('express') && !dep('fastify') && !dep('@nestjs/core')) stack = 'vite-spa';
   else if (has('pyproject.toml', 'setup.py', 'Pipfile', 'manage.py') || some(/^requirements[\w.-]*\.txt$/)) stack = 'python';
   else if (some(/\.php$/)) stack = 'php'; // WordPress themes and plain PHP sites have no composer.json
   else if (some(/^playwright\.config\./) && !runtimeDeps) stack = 'playwright';
@@ -333,22 +347,18 @@ function cutBlock(text, blk) { return text.slice(0, blk.start) + text.slice(blk.
 const isNegation = r => r.startsWith('Read(!');
 // The kit's permission rules for these apps: the shared list, plus Composer's auth.json (registry tokens) for each
 // PHP app. A bare `auth.json` rule would also hide translation files of that name, so these are anchored per app.
-function kitPermissions(apps, autonomy) {
+function kitPermissions(apps) {
   const php = (apps || []).filter(a => a.stacks.includes('php') || a.stacks.includes('laravel'));
   const auth = [...new Set(php.map(a => `Read(/${a.path === '.' ? '' : `${a.path}/`}auth.json)`))];
   const deny = KIT_SETTINGS.permissions.deny || [];
-  const auto = autonomy === 'auto';
-  return {
-    deny: [...deny.filter(r => !isNegation(r)), ...(auto ? AUTO_DENY : []), ...auth, ...deny.filter(isNegation)],
-    ask: auto ? [] : KIT_SETTINGS.permissions.ask || [],
-  };
+  return { deny: [...deny.filter(r => !isNegation(r)), ...auth, ...deny.filter(isNegation)], ask: KIT_SETTINGS.permissions.ask || [] };
 }
 // Adds kit permission rules the project doesn't have yet, skipping any the kit offered before (the user may have
 // removed them on purpose). The user's own rules keep their order: a "!" pattern only carves exceptions out of rules
 // listed before it, so new rules go in front of the user's negations and new negations go last.
 // `drop` lists rules to take out first: the ones a change of autonomy mode retires.
-function mergeSettings(existing, offered, apps, autonomy, drop) {
-  const kit = kitPermissions(apps, autonomy);
+function mergeSettings(existing, offered, apps, drop) {
+  const kit = kitPermissions(apps);
   const out = existing ? JSON.parse(JSON.stringify(existing)) : {};
   const hadPermissions = Boolean(out.permissions);
   out.permissions = out.permissions || {};
@@ -373,8 +383,8 @@ function mergeSettings(existing, offered, apps, autonomy, drop) {
   const merged = out.$schema ? out : { $schema: KIT_SETTINGS.$schema, ...out };
   return { merged, added, dropped };
 }
-function offeredRules(previous, apps, autonomy) {
-  const kit = kitPermissions(apps, autonomy);
+function offeredRules(previous, apps) {
+  const kit = kitPermissions(apps);
   const out = {};
   for (const key of ['deny', 'ask']) out[key] = [...new Set([...((previous && previous[key]) || []), ...kit[key]])];
   return out;
@@ -458,7 +468,7 @@ function checkTarget(root, rel) {
 }
 
 // Plans the settings merge; returns the rules it adds and, when it creates the file, the content.
-function writeSettings(root, w, offered, apps, autonomy, drop) {
+function writeSettings(root, w, offered, apps, drop) {
   const abs = path.join(root, SETTINGS);
   let existing = null;
   let raw = null;
@@ -467,7 +477,7 @@ function writeSettings(root, w, offered, apps, autonomy, drop) {
     try { existing = JSON.parse(raw); } catch { fail(`${SETTINGS} is not valid JSON; fix it first (nothing was changed)`); }
     if (!existing || typeof existing !== 'object' || Array.isArray(existing)) fail(`${SETTINGS} is not a JSON object; fix it first (nothing was changed)`);
   }
-  const { merged, added, dropped } = mergeSettings(existing, offered, apps, autonomy, drop);
+  const { merged, added, dropped } = mergeSettings(existing, offered, apps, drop);
   if (existing && JSON.stringify(existing) === JSON.stringify(merged)) { w.note(`unchanged ${SETTINGS}`); return { added, dropped, created: null }; }
   const next = jsonText(merged, raw);
   w.write(SETTINGS, next, existing ? 'merged' : 'created', existing ? eolOf(abs) : '\n');
@@ -590,6 +600,8 @@ function cmdInstall(args) {
   if (new Set(names).size !== names.length) fail('app names must be unique');
   const autonomy = args.autonomy || 'guarded';
   if (!AUTONOMY.includes(autonomy)) fail(`unknown --autonomy "${autonomy}"; use ${AUTONOMY.join(' or ')}`);
+  const rigor = args.rigor || 'standard';
+  if (!RIGOR.includes(rigor)) fail(`unknown --rigor "${rigor}"; use ${RIGOR.join(', ')}`);
   const name = (args.name || path.basename(root)).replace(/[<>`|\r\n]/g, '').trim() || 'Project';
   const w = makeWriter(root, args['dry-run']);
   const created = {};
@@ -634,7 +646,8 @@ function cmdInstall(args) {
   const log = appendLog(root, w, logLine);
   if (log !== null) created['05-progress/log.md'] = sha(log);
   if (!present(path.join(root, 'CHANGELOG.md'))) create('CHANGELOG.md', read(path.join(LAYER, 'templates', 'changelog.md')));
-  const settings = writeSettings(root, w, null, apps, autonomy);
+  if (!present(path.join(root, GLOSSARY))) create(GLOSSARY, read(path.join(LAYER, 'templates', 'glossary.md')));
+  const settings = writeSettings(root, w, null, apps);
   if (settings.created) created[SETTINGS] = sha(settings.created);
   const gitignore = writeBlock(root, w, '.gitignore', GITIGNORE_LINES);
   if (gitignore.created) created['.gitignore'] = sha(gitignore.created);
@@ -642,14 +655,14 @@ function cmdInstall(args) {
   if (gitattributes.created) created['.gitattributes'] = sha(gitattributes.created);
 
   w.write(MANIFEST, manifestText({
-    kitVersion: KIT_VERSION, project: name, autonomy, apps, files: hashes, coreHash: sha(tpl.core), profileHash: sha(profile),
-    created, settingsAdded: settings.added, settingsOffered: offeredRules(null, apps, autonomy), gitignoreAdded: gitignore.added,
+    kitVersion: KIT_VERSION, project: name, rigor, autonomy, apps, files: hashes, coreHash: sha(tpl.core), profileHash: sha(profile),
+    created, settingsAdded: settings.added, settingsOffered: offeredRules(null, apps), gitignoreAdded: gitignore.added,
     gitattributesAdded: gitattributes.added, installedAt: today(), updatedAt: today(),
   }), null);
   w.commit();
   console.log(`${args['dry-run'] ? 'Dry run: would install' : 'Installed'} project-kit v${KIT_VERSION} in ${root}`);
   console.log(`Apps: ${apps.length ? apps.map(fmtApp).join(', ') : 'none detected'}`);
-  if (autonomy === 'auto') console.log('Autonomy: auto (no ask rules; secret-printing and remote infrastructure commands are denied)');
+  console.log(`Rigor: ${rigor} · autonomy: ${autonomy}`);
   console.log(w.log.map(l => `  ${l}`).join('\n'));
 }
 
@@ -714,7 +727,7 @@ function syncInto(root, manifest, args, w, drop) {
     w.note('skipped   CLAUDE.md core block (edited locally; put project rules outside the block, or rerun with --force)');
   }
   if (text !== null && next !== text) w.write('CLAUDE.md', next, 'updated', eolOf(claudeAbs));
-  const settings = writeSettings(root, w, manifest.settingsOffered || LEGACY_OFFERED, manifest.apps, autonomyOf(manifest), drop);
+  const settings = writeSettings(root, w, manifest.settingsOffered || LEGACY_OFFERED, manifest.apps, drop || retiredIn(manifest));
   // New ignore and merge lines reach existing projects too. Installs from before 1.1.0 didn't record what they
   // created, so for those only files that already exist are extended.
   const canCreate = Boolean(manifest.created);
@@ -744,7 +757,7 @@ function manifestAfter(manifest, res) {
   const offered = { deny: minus(before.deny, gone.deny), ask: minus(before.ask, gone.ask) };
   return {
     ...manifest, kitVersion: KIT_VERSION, files: res.files, coreHash: res.coreHash, profileHash: res.profileHash,
-    settingsAdded, settingsOffered: offeredRules(offered, manifest.apps, autonomyOf(manifest)),
+    settingsAdded, settingsOffered: offeredRules(offered, manifest.apps),
     created: manifest.created && { ...manifest.created, ...res.created },
     gitignoreAdded: union(manifest.gitignoreAdded, res.gitignoreAdded),
     gitattributesAdded: union(manifest.gitattributesAdded, res.gitattributesAdded),
@@ -803,52 +816,329 @@ function cmdRemoveApp(args) {
   else console.log(`\nRemove the rows for ${names.join(', ')} from the Project Profile tables in CLAUDE.md.`);
 }
 
-// Shows or changes the autonomy mode. Changing it swaps the kit's own permission rules (the ask rules in guarded
-// mode, the extra deny rules in auto mode) and syncs, so CLAUDE.md has the section that explains the mode. Rules
-// the project wrote itself are never removed.
+// ---------- autonomy and rigor: project defaults kept in the manifest ----------
+const UI_STACKS = new Set(['flutter', 'nuxt', 'nextjs', 'vite-spa', 'react-native', 'html-css']);
 function askRulesIn(root) {
   const s = jsonOf(path.join(root, SETTINGS));
   const ask = s && s.permissions && s.permissions.ask;
   return Array.isArray(ask) ? ask : [];
 }
-function cmdAutonomy(args) {
+function setManifestField(args, field, allowed, explain) {
   const root = path.resolve(args['project-dir'] || '.');
   const manifest = loadManifest(root);
-  const from = autonomyOf(manifest);
+  const from = field === 'rigor' ? rigorOf(manifest) : autonomyOf(manifest);
   const to = args._[1];
-  if (!to) {
-    console.log(`autonomy: ${from}`);
-    console.log(from === 'auto'
-      ? '  Unattended development: the kit adds no ask rules; secret-printing and remote infrastructure commands are denied.'
-      : "  The kit's ask rules prompt before destructive commands, also under --dangerously-skip-permissions.");
-    console.log(`  Change it with: node kit.mjs autonomy ${from === 'auto' ? 'guarded' : 'auto'}`);
+  if (!to) { console.log(`${field}: ${from}`); console.log(`  ${explain[from]}`); return; }
+  if (!allowed.includes(to)) fail(`unknown ${field} "${to}"; use ${allowed.join(', ')}`);
+  const w = makeWriter(root, args['dry-run']);
+  if (from !== to) appendLog(root, w, `${stamp()} kit ${field} ${from} → ${to}`);
+  w.write(MANIFEST, manifestText({ ...manifest, [field]: to, updatedAt: today() }), null);
+  w.commit();
+  console.log(`${args['dry-run'] ? 'Dry run: ' : ''}${field} ${from} → ${to}`);
+  console.log(`  ${explain[to]}`);
+  if (field === 'autonomy' && to === 'auto') {
+    const left = askRulesIn(root);
+    if (left.length) console.log(`  note: ${left.length} ask rule(s) in ${SETTINGS} still prompt in every permission mode: ${left.join(', ')}. Run sync to take out the ones the kit added; remove your own by hand if you want no prompts.`);
+  }
+}
+function cmdAutonomy(args) {
+  setManifestField(args, 'autonomy', AUTONOMY, {
+    guarded: 'Claude asks before destructive commands and risky changes. A session can still run unattended with PROJECT_KIT_AUTONOMY=auto or --dangerously-skip-permissions.',
+    auto: "Unattended by default: nothing asks; commands that print secrets or change remote infrastructure are denied. A session can opt back in with PROJECT_KIT_AUTONOMY=guarded.",
+  });
+}
+function cmdRigor(args) {
+  setManifestField(args, 'rigor', RIGOR, {
+    prototype: 'Demos, spikes, and internal tools: smoke tests on the critical journey, light task files, no coverage floor or visual baselines. Security rules still apply.',
+    standard: 'Most client work: test first, real-database integration tests, E2E for critical journeys, a reviewer per task.',
+    production: 'Long-lived or regulated systems: every gate, including coverage floors, visual baselines, and the security gate on every sensitive task.',
+  });
+}
+
+// ---------- task files: create, start, move, pick ----------
+const TASK_FILE = /^(task|hotfix)-(\d{3})(?:-[\w.-]+)?\.md$/;
+function slugOf(title) { return String(title).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'item'; }
+function parseValue(raw) {
+  const v = raw.trim();
+  if (v.startsWith('"')) { const m = v.match(/^"((?:[^"\\]|\\.)*)"/); return m ? JSON.parse(`"${m[1]}"`) : v; }
+  if (v.startsWith('[')) { const m = v.match(/^\[([^\]]*)\]/); return m ? m[1].split(',').map(x => x.trim().replace(/^["']|["']$/g, '')).filter(Boolean) : []; }
+  const plain = v.replace(/\s+#.*$/, '').trim();
+  return plain === 'null' || plain === '' ? null : plain === 'true' ? true : plain === 'false' ? false : plain;
+}
+function frontMatterOf(text) {
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const out = {};
+  if (m) for (const line of m[1].split(/\r?\n/)) { const kv = line.match(/^([a-z_]+):(.*)$/); if (kv) out[kv[1]] = parseValue(kv[2]); }
+  return out;
+}
+function setFields(text, fields) {
+  let out = text;
+  for (const [key, value] of Object.entries(fields)) {
+    const v = value === null ? 'null' : Array.isArray(value) ? `[${value.join(', ')}]` : typeof value === 'string' && /[:#"'[\]{}]|^\s|\s$|^$/.test(value) ? JSON.stringify(value) : String(value);
+    const re = new RegExp(`^(${key}:)[ \\t]*(?:"(?:[^"\\\\]|\\\\.)*"|\\[[^\\]\\n]*\\]|[^#\\n]*?)([ \\t]+#.*)?$`, 'm');
+    // Keep a trailing comment, at its old column when the new value still fits before it.
+    if (re.test(out)) out = out.replace(re, (whole, k, comment) => {
+      if (!comment) return `${k} ${v}`;
+      const head = `${k} ${v}`;
+      return `${head.padEnd(Math.max(whole.length - comment.trimStart().length, head.length + 1))}${comment.trimStart()}`;
+    });
+  }
+  return out;
+}
+function walkMd(dir) {
+  const out = [];
+  for (const e of entriesOf(dir)) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...walkMd(p)); else if (e.isFile() && e.name.endsWith('.md')) out.push(p);
+  }
+  return out;
+}
+function listTasks(root) {
+  return walkMd(path.join(root, '04-tasks')).filter(f => TASK_FILE.test(path.basename(f))).map(f => {
+    const fm = frontMatterOf(textOf(f));
+    const id = path.basename(f).match(TASK_FILE).slice(1, 3).join('-');
+    return {
+      id, file: posix(path.relative(root, f)), title: fm.title || '', status: fm.status || 'todo', app: fm.app || '',
+      phase: fm.phase || '', type: fm.type || '', depends_on: Array.isArray(fm.depends_on) ? fm.depends_on : [],
+      blocked_reason: fm.blocked_reason || null, security_sensitive: fm.security_sensitive === true,
+    };
+  }).sort((a, b) => a.id.localeCompare(b.id));
+}
+function findTask(root, id) {
+  if (!/^(task|hotfix)-\d{3}$/.test(String(id))) fail(`give a task id such as task-007 or hotfix-002 (got "${id || ''}")`);
+  const t = listTasks(root).find(x => x.id === id);
+  if (!t) fail(`no task file for ${id} under 04-tasks/`);
+  return t;
+}
+function gitOut(root, ...a) { const r = spawnSync('git', a, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; }
+// One above the highest id in the folders and anywhere in git history, since other branches may hold newer ones.
+function nextNumber(root, prefix, dirs) {
+  const re = new RegExp(`(?:^|/)${prefix}-(\\d{2,3})`);
+  const names = dirs.flatMap(d => walkMd(path.join(root, d)).map(f => posix(path.relative(root, f))));
+  const logged = gitOut(root, 'log', '--all', '--format=', '--name-only', '--', ...dirs);
+  if (logged) names.push(...logged.split('\n'));
+  return names.reduce((max, n) => { const m = n.match(re); return m ? Math.max(max, Number(m[1])) : max; }, 0) + 1;
+}
+const isReady = (t, byId) => t.status === 'todo' && t.depends_on.every(d => byId.get(d) && byId.get(d).status === 'done');
+const order = (a, b) => (a.id.startsWith('hotfix') === b.id.startsWith('hotfix') ? a.phase.localeCompare(b.phase) || a.id.localeCompare(b.id) : a.id.startsWith('hotfix') ? -1 : 1);
+function readyTasks(tasks) { const byId = new Map(tasks.map(t => [t.id, t])); return tasks.filter(t => isReady(t, byId)).sort(order); }
+function templateText(root, name) {
+  const own = path.join(root, TEMPLATES_DIR, name);
+  return present(own) && !isLink(own) ? read(own) : read(path.join(LAYER, 'templates', name));
+}
+function activePhase(root) {
+  const phases = walkMd(path.join(root, '03-phases')).map(f => ({ f, fm: frontMatterOf(textOf(f)) })).filter(p => /^phase-\d+$/.test(p.fm.id || ''));
+  const active = phases.find(p => p.fm.status === 'active') || phases.filter(p => p.fm.status === 'planned').sort((a, b) => a.fm.id.localeCompare(b.fm.id))[0];
+  return active ? active.fm.id : null;
+}
+const mainCheckout = root => isDir(path.join(root, '.git'));
+// Rewrites the Updated, Active task, Branch, and Queue lines of STATUS.md (main checkout only); the rest is Claude's.
+function refreshStatus(root, w, tasks) {
+  const rel = '05-progress/STATUS.md';
+  const abs = path.join(root, rel);
+  if (!mainCheckout(root) || !present(abs) || isLink(abs)) return;
+  const active = tasks.filter(t => t.status === 'in-progress');
+  const queue = readyTasks(tasks).slice(0, 5).map(t => t.id);
+  const line = {
+    'Updated:': `${stamp()} UTC`,
+    'Active task:': active.length ? active.map(t => `${t.id} ${t.title}`.trim()).join('; ') : 'none',
+    'Branch:': gitOut(root, 'branch', '--show-current') || 'unknown',
+    'Queue:': queue.length ? queue.join(', ') : 'none',
+  };
+  const text = textOf(abs);
+  const next = text.split('\n').map(l => { const k = Object.keys(line).find(x => l.startsWith(x)); return k ? `${k} ${line[k]}` : l; }).join('\n');
+  if (next !== text) w.write(rel, next, 'updated', eolOf(abs));
+}
+
+function cmdNew(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  const manifest = loadManifest(root);
+  const kind = args._[1];
+  const title = (args.title || args._.slice(2).join(' ')).replace(/[\r\n]+/g, ' ').trim();
+  if (!['task', 'hotfix', 'adr', 'phase'].includes(kind)) fail('use: new task|hotfix|adr|phase --title "…"');
+  if (!title) fail(`give the ${kind} a --title`);
+  const w = makeWriter(root, args['dry-run']);
+  const date = today();
+  let rel, text, id;
+  if (kind === 'phase') {
+    if (args.phase && !/^phase-\d{2}$/.test(args.phase)) fail(`bad --phase "${args.phase}"; expected phase-00 or similar`);
+    id = args.phase || `phase-${String(nextNumber(root, 'phase', ['03-phases'])).padStart(2, '0')}`;
+    rel = `03-phases/${id}-${slugOf(title)}.md`;
+    text = setFields(templateText(root, 'phase.md'), { id, title, status: 'planned', created: date, updated: date })
+      .replace(/^# phase-\d+: .*$/m, `# ${id}: ${title}`);
+  } else if (kind === 'adr') {
+    id = `ADR-${String(nextNumber(root, 'ADR', ['06-technical-docs/decisions'])).padStart(3, '0')}`;
+    rel = `06-technical-docs/decisions/${id}-${slugOf(title)}.md`;
+    text = setFields(templateText(root, 'adr.md'), { id, status: 'proposed', date })
+      .replace(/^# ADR-\d+: .*$/m, `# ${id}: ${title}`);
+  } else {
+    const prefix = kind;
+    id = `${prefix}-${String(nextNumber(root, prefix, ['04-tasks'])).padStart(3, '0')}`;
+    const phase = kind === 'hotfix' ? 'hotfix' : args.phase || activePhase(root) || 'phase-01';
+    if (!/^(phase-\d+|hotfix)$/.test(phase)) fail(`bad --phase "${phase}"; expected phase-01 or similar`);
+    const names = manifest.apps.map(a => a.name);
+    const app = (args.app[0] || (names.length === 1 ? names[0] : '')).trim();
+    if (!app) fail(`give --app (one of: ${names.join(', ') || 'none; add apps first'})`);
+    for (const a of app.split(',')) if (!names.includes(a.trim())) fail(`no app named "${a.trim()}" (apps: ${names.join(', ')})`);
+    const type = args.type || (kind === 'hotfix' ? 'fix' : 'feat');
+    if (!['feat', 'fix', 'refactor', 'test', 'docs', 'chore'].includes(type)) fail(`bad --type "${type}"`);
+    const depends = String(args.depends || '').split(',').map(x => x.trim()).filter(Boolean);
+    for (const d of depends) if (!/^(task|hotfix)-\d{3}$/.test(d)) fail(`bad --depends entry "${d}"`);
+    rel = `04-tasks/${phase}/${id}-${slugOf(title)}.md`;
+    text = setFields(templateText(root, 'task.md'), {
+      id, type, title, phase, app, status: 'todo', security_sensitive: Boolean(args.security), ui: Boolean(args.ui),
+      depends_on: depends, created: date, updated: date, owner: 'claude',
+    }).replace(/^# (task|hotfix)-\d+: .*$/m, `# ${id}: ${title}`);
+    // The phase's task table gets the row (status lives only in the task file).
+    const phaseFile = walkMd(path.join(root, '03-phases')).find(f => path.basename(f).startsWith(`${phase}-`) || path.basename(f) === `${phase}.md`);
+    if (phaseFile && !isLink(phaseFile)) {
+      const lines = textOf(phaseFile).split('\n');
+      const h = lines.findIndex(l => /^\|\s*id\s*\|\s*title\s*\|/.test(l));
+      if (h !== -1) {
+        let end = h + 2;
+        while (end < lines.length && lines[end].startsWith('|')) end++;
+        const rows = lines.slice(h + 2, end).filter(l => !/^\|\s*task-\d{3}\s*\|\s*\|/.test(l));
+        rows.push(`| ${id} | ${title.replace(/\|/g, '\\|')} | ${app} | ${depends.join(', ')} |`);
+        lines.splice(h + 2, end - h - 2, ...rows);
+        w.write(posix(path.relative(root, phaseFile)), lines.join('\n'), 'updated', eolOf(phaseFile));
+      }
+    }
+  }
+  if (present(path.join(root, rel))) fail(`${rel} already exists`);
+  w.write(rel, text, 'created');
+  appendLog(root, w, `${stamp()} ${id} created: ${title}`);
+  if (kind === 'task' || kind === 'hotfix') refreshStatus(root, w, [...listTasks(root), { id, title, status: 'todo', depends_on: String(args.depends || '').split(',').map(x => x.trim()).filter(Boolean), phase: '', app: '' }]);
+  w.commit();
+  console.log(`${args['dry-run'] ? 'Dry run: would create' : 'Created'} ${id}: ${rel}`);
+  if (kind === 'task' || kind === 'hotfix') console.log(`  Fill in its acceptance criteria and test plan, then: node kit.mjs start ${id}`);
+}
+
+function changeTask(root, args, id, fields, logText) {
+  const t = findTask(root, id);
+  const w = makeWriter(root, args['dry-run']);
+  const abs = path.join(root, t.file);
+  if (isLink(abs)) fail(`${t.file} is a symbolic link; the kit doesn't write through links`);
+  w.write(t.file, setFields(read(abs), { ...fields, updated: today() }), 'updated', eolOf(abs));
+  appendLog(root, w, `${stamp()} ${id} ${logText}`);
+  refreshStatus(root, w, listTasks(root).map(x => (x.id === id ? { ...x, ...fields } : x)));
+  w.commit();
+  return t;
+}
+
+function cmdStart(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  loadManifest(root);
+  const id = args._[1];
+  const t = findTask(root, id);
+  const byId = new Map(listTasks(root).map(x => [x.id, x]));
+  const waiting = t.depends_on.filter(d => !byId.get(d) || byId.get(d).status !== 'done');
+  if (waiting.length) console.log(`note: ${id} depends on ${waiting.map(d => `${d} (${byId.get(d) ? byId.get(d).status : 'missing'})`).join(', ')}; cut its branch from the branch of the unmerged one`);
+  const branch = `${id}-${slugOf(path.basename(t.file, '.md').replace(/^(task|hotfix)-\d{3}-?/, '') || t.title)}`;
+  const inGit = gitOut(root, 'rev-parse', '--is-inside-work-tree') === 'true';
+  if (inGit && !args['dry-run']) {
+    const current = gitOut(root, 'branch', '--show-current');
+    if (current !== branch) {
+      if (gitOut(root, 'status', '--porcelain', '--untracked-files=no') && !args.force) fail('the working tree has uncommitted changes; commit or park them (wip commit) first, or pass --force');
+      const exists = gitOut(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`) !== null;
+      const r = spawnSync('git', exists ? ['switch', branch] : ['switch', '-c', branch], { cwd: root, encoding: 'utf8' });
+      if (r.status !== 0) fail(`git switch failed: ${(r.stderr || '').trim()}`);
+    }
+  }
+  changeTask(root, args, id, { status: 'in-progress', blocked_reason: null }, `${t.status} → in-progress`);
+  console.log(`${args['dry-run'] ? 'Dry run: would start' : 'Started'} ${id} on branch ${inGit ? branch : '(not a git repository)'}: ${t.file}`);
+}
+
+function cmdSet(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  loadManifest(root);
+  const [, id, status] = args._;
+  if (!STATUSES.includes(status)) fail(`give a status: ${STATUSES.join(', ')}`);
+  if (status === 'blocked' && !args.reason) fail('a blocked task needs --reason "…"');
+  const t = findTask(root, id);
+  changeTask(root, args, id, { status, blocked_reason: status === 'blocked' ? args.reason : null }, `${t.status} → ${status}${args.reason ? `: ${args.reason}` : ''}`);
+  console.log(`${args['dry-run'] ? 'Dry run: ' : ''}${id} ${t.status} → ${status}`);
+}
+
+function cmdNext(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  loadManifest(root);
+  const tasks = listTasks(root);
+  const ready = readyTasks(tasks);
+  const pick = args.parallel ? ready : ready.slice(0, 1);
+  if (args.json) { console.log(JSON.stringify(pick, null, 2)); return; }
+  const doing = tasks.filter(t => t.status === 'in-progress');
+  if (doing.length) console.log(`in progress: ${doing.map(t => t.id).join(', ')} (finish or park it before starting another in this checkout)`);
+  if (!pick.length) {
+    const blocked = tasks.filter(t => t.status === 'blocked');
+    console.log(`No ready task.${blocked.length ? ` Blocked: ${blocked.map(t => `${t.id} (${t.blocked_reason || 'no reason'})`).join('; ')}` : ''}`);
     return;
   }
-  if (!AUTONOMY.includes(to)) fail(`unknown mode "${to}"; use ${AUTONOMY.join(' or ')}`);
-  const added = manifest.settingsAdded;
-  const drop = to === 'auto'
-    ? { ask: added ? added.ask || [] : union(KIT_SETTINGS.permissions.ask, LEGACY_OFFERED.ask) }
-    : { deny: added ? AUTO_DENY.filter(r => (added.deny || []).includes(r)) : AUTO_DENY };
-  const w = makeWriter(root, args['dry-run']);
-  const next = { ...manifest, autonomy: to };
-  const res = syncInto(root, next, args, w, drop);
-  if (from !== to) appendLog(root, w, `${stamp()} kit autonomy ${from} → ${to}`);
-  w.write(MANIFEST, manifestText(manifestAfter(next, res)), null);
-  w.commit();
-  console.log(`${args['dry-run'] ? 'Dry run: autonomy' : 'Autonomy'} ${from} → ${to}`);
-  const gone = res.settingsDropped;
-  if (gone.ask.length) console.log(`  removed ${gone.ask.length} ask rule(s) the kit had added to ${SETTINGS}`);
-  if (gone.deny.length) console.log(`  removed ${gone.deny.length} deny rule(s) that only auto mode uses`);
-  if (res.settingsAdded.ask.length) console.log(`  added ${res.settingsAdded.ask.length} ask rule(s)`);
-  if (res.settingsAdded.deny.length) console.log(`  added ${res.settingsAdded.deny.length} deny rule(s)`);
-  const changed = w.log.filter(l => !/^unchanged/.test(l));
-  if (changed.length) console.log(changed.map(l => `  ${l}`).join('\n'));
-  if (to === 'auto') {
-    const left = args['dry-run'] ? minus(askRulesIn(root), gone.ask) : askRulesIn(root);
-    if (left.length) console.log(`  note: ${left.length} ask rule(s) of your own remain in ${SETTINGS} and still prompt in every permission mode: ${left.join(', ')}`);
-    console.log('  Ask rules in .claude/settings.local.json and ~/.claude/settings.json prompt too; the kit never edits those.');
+  for (const t of pick) console.log(`${t.id}  ${t.title}  [${t.app}${t.security_sensitive ? ', security-sensitive' : ''}]  ${t.file}`);
+  if (args.parallel && pick.length > 1) {
+    const apps = pick.map(t => t.app);
+    const shared = [...new Set(apps.filter((a, i) => apps.indexOf(a) !== i))];
+    console.log(`These can run in parallel, one worktree each.${shared.length ? ` Tasks on the same app (${shared.join(', ')}) may touch the same files; run those one after another.` : ''}`);
+  } else console.log(`Start it: node kit.mjs start ${pick[0].id}`);
+}
+
+function cmdBoard(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  loadManifest(root);
+  const tasks = listTasks(root);
+  if (args.json) { console.log(JSON.stringify(tasks, null, 2)); return; }
+  const ready = new Set(readyTasks(tasks).map(t => t.id));
+  console.log(STATUSES.map(s => `${s} ${tasks.filter(t => t.status === s).length}`).join(' · '));
+  for (const s of ['in-progress', 'in-review', 'blocked', 'todo']) {
+    const list = tasks.filter(t => t.status === s);
+    if (!list.length) continue;
+    console.log(`\n${s}`);
+    for (const t of list) console.log(`  ${t.id}  ${t.title}${s === 'blocked' ? `  — ${t.blocked_reason || 'no reason'}` : ''}${s === 'todo' ? (ready.has(t.id) ? '  (ready)' : `  (waits on ${t.depends_on.join(', ')})`) : ''}`);
   }
-  if (res.skipped.length) process.exitCode = 1;
+}
+
+// ---------- quick checks and starter repositories ----------
+function cmdCheck(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  const manifest = loadManifest(root);
+  const name = args._[1];
+  const checks = { ...(manifest.checks || {}) };
+  const effective = a => (a.name in checks ? checks[a.name] : a.stacks.map(s => STACKS[s].kit.check).find(Boolean) || '');
+  if (!name) {
+    for (const a of manifest.apps) { const c = effective(a); console.log(`  ${a.name.padEnd(14)} ${c ? `${c.cmd}${c.ext ? `  (.${c.ext.split(',').join(', .')})` : ''}` : 'off'}`); }
+    return;
+  }
+  if (!manifest.apps.some(a => a.name === name)) fail(`no app named "${name}"`);
+  if (args.reset) delete checks[name];
+  else if (args.off) checks[name] = '';
+  else if (args.cmd) checks[name] = { cmd: args.cmd, ...(args.ext ? { ext: args.ext } : {}) };
+  else fail('give --cmd "…{file}…" [--ext php,inc], --off, or --reset');
+  const w = makeWriter(root, args['dry-run']);
+  w.write(MANIFEST, manifestText({ ...manifest, checks, updatedAt: today() }), null);
+  w.commit();
+  const c = effective({ ...manifest.apps.find(a => a.name === name), name });
+  console.log(`${name}: quick check ${c ? `\`${c.cmd}\`` : 'off'}`);
+}
+
+function startersFile() { return path.join(process.env.PROJECT_KIT_HOME || path.join(os.homedir(), '.claude', 'project-kit'), 'starters.json'); }
+function cmdStarters(args) {
+  const file = startersFile();
+  const list = jsonOf(file) || {};
+  const [, action, stack, url] = args._;
+  if (!action) {
+    const keys = Object.keys(list);
+    if (!keys.length) console.log(`No starter repositories yet. Add one: node kit.mjs starters set <stack> <git-url> (kept in ${file})`);
+    for (const k of keys) console.log(`  ${k.padEnd(16)} ${list[k]}`);
+    return;
+  }
+  if (!['set', 'remove'].includes(action)) fail('use: starters, starters set <stack> <git-url>, or starters remove <stack>');
+  if (!STACKS[stack]) fail(`unknown stack "${stack}". Run: node kit.mjs stacks`);
+  if (action === 'set') {
+    if (!/^(https:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])\S+$/.test(url || '')) fail('give a git URL (https://…, git@…:…, or a local path)');
+    list[stack] = url;
+  } else delete list[stack];
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(list, null, 2)}\n`);
+  console.log(`${action === 'set' ? `starter for ${stack}: ${url}` : `removed the starter for ${stack}`} (${file})`);
 }
 
 // Removes what install created and nobody has edited since, gives merged files their own content back, and
@@ -980,9 +1270,16 @@ function cmdDoctor(args) {
   if (manifest.apps.length) ok(`apps: ${manifest.apps.map(a => `${a.name} (${a.stacks.join('+')}) at ${a.path}`).join('; ')}`);
   else warn('no apps yet → add them with /project-kit:add-stack or /project-kit:kickoff');
   for (const a of manifest.apps) if (a.path !== '.' && !exists(path.join(root, a.path))) warn(`app folder ${a.path} does not exist yet`);
-  const autonomy = autonomyOf(manifest);
-  ok(`autonomy: ${autonomy}${autonomy === 'auto' ? ' (unattended development; no kit ask rules)' : ''}`);
-  if (autonomy === 'auto' && askRulesIn(root).length) warn(`${askRulesIn(root).length} ask rule(s) in ${SETTINGS} still prompt in every permission mode`);
+  ok(`rigor: ${rigorOf(manifest)} · autonomy: ${autonomyOf(manifest)} (a session can override it with PROJECT_KIT_AUTONOMY or --dangerously-skip-permissions)`);
+  const leftover = askRulesIn(root);
+  if (leftover.length) warn(`${leftover.length} ask rule(s) in ${SETTINGS} prompt in every permission mode, also in unattended sessions: ${leftover.slice(0, 5).join(', ')}${leftover.length > 5 ? ', …' : ''}`);
+  const uiApps = manifest.apps.filter(a => a.stacks.some(s => UI_STACKS.has(s)));
+  const design = textOf(path.join(root, 'DESIGN.md'));
+  if (uiApps.length && !design) warn('DESIGN.md missing; UI apps need a chosen design direction (/project-kit:design-intake)');
+  else if (uiApps.length && /UNCHOSEN/.test(design)) warn('DESIGN.md is still the unchosen starter; pick a direction with /project-kit:design-intake before building screens');
+  if (!exists(path.join(root, GLOSSARY)) || /^\|\s*\*\*Term\*\*/m.test(textOf(path.join(root, GLOSSARY)))) warn(`${GLOSSARY} has no terms yet; add the client's words as they come up`);
+  const node = Number(process.versions.node.split('.')[0]);
+  (node >= 20 ? ok : bad)(`Node.js ${process.versions.node} runs the hooks${node >= 20 ? '' : '; the hooks need Node 20 or later'}`);
 
   const desired = renderKitFiles(manifest.apps);
   let missing = 0, edited = 0;
@@ -1045,12 +1342,22 @@ function cmdDoctor(args) {
 const HELP = `project-kit ${KIT_VERSION}
   node kit.mjs stacks                      list stack ids
   node kit.mjs detect [--json]             suggest apps from stack markers in the repo
-  node kit.mjs install --app <name>=<stack>[+<stack>]:<path> [--app ...] [--name "Project"] [--autonomy auto] [--merge-claude-md] [--dry-run]
+  node kit.mjs install --app <name>=<stack>[+<stack>]:<path> [--app ...] [--name "Project"] [--rigor prototype|standard|production]
+                   [--autonomy guarded|auto] [--merge-claude-md] [--dry-run]
   node kit.mjs install --auto [--dry-run]  install with the detected apps; refuses when CLAUDE.md exists
   node kit.mjs add-app --app <name>=<stack>:<path> [--dry-run]
   node kit.mjs remove-app <name> [<name> ...] [--dry-run]
   node kit.mjs sync [--dry-run] [--force]
-  node kit.mjs autonomy [guarded|auto] [--dry-run]   show or change the mode; auto is for unattended development
+  node kit.mjs autonomy [guarded|auto]      show or set the project's default autonomy
+  node kit.mjs rigor [prototype|standard|production]   show or set how much process the project carries
+  node kit.mjs new task --title "…" [--phase phase-01] [--app web] [--type feat] [--security] [--ui] [--depends task-001,task-002]
+  node kit.mjs new hotfix|adr --title "…"      new phase --title "…" [--phase phase-00]
+  node kit.mjs start <id>                   branch <id>-<slug>, mark it in-progress, update STATUS.md
+  node kit.mjs set <id> <status> [--reason "…"]   backlog todo in-progress blocked in-review done cancelled
+  node kit.mjs next [--parallel] [--json]   the next ready task (dependencies done), or every ready one
+  node kit.mjs board [--json]               tasks by status
+  node kit.mjs check <app> [--cmd "…{file}…" --ext php,inc | --off | --reset]   the quick check after each edit
+  node kit.mjs starters [set <stack> <git-url> | remove <stack>]   starter repositories kickoff clones for new apps
   node kit.mjs doctor
   node kit.mjs uninstall [--data-dir <plugin data dir>] [--dry-run]   remove what install created and nobody edited
   node kit.mjs skip --data-dir <plugin data dir>   stop the session hook from offering setup in this repo
@@ -1058,7 +1365,8 @@ Options: --project-dir <dir> (default: current directory)`;
 
 const COMMANDS = {
   stacks: cmdStacks, detect: cmdDetect, install: cmdInstall, 'add-app': cmdAddApp, 'remove-app': cmdRemoveApp,
-  sync: cmdSync, autonomy: cmdAutonomy, doctor: cmdDoctor, uninstall: cmdUninstall, skip: cmdSkip,
+  sync: cmdSync, autonomy: cmdAutonomy, rigor: cmdRigor, new: cmdNew, start: cmdStart, set: cmdSet,
+  next: cmdNext, board: cmdBoard, check: cmdCheck, starters: cmdStarters, doctor: cmdDoctor, uninstall: cmdUninstall, skip: cmdSkip,
 };
 const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];

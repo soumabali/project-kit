@@ -2,7 +2,7 @@
 paths:
   - "{{APP}}/**/*.{rb,erb,rake,ru,jbuilder,haml,slim}"
   - "{{APP}}/Gemfile"
-kit: {"name": "Ruby on Rails", "commands": {"setup": "bin/setup --skip-server", "dev": "bin/dev", "test": "bin/rails test", "testOne": "bin/rails test <file>:<line>", "lint": "bin/rubocop", "build": "bin/rails assets:precompile", "audit": "bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error && bin/bundler-audit check --update"}}
+kit: {"name": "Ruby on Rails", "commands": {"setup": "bin/setup --skip-server", "dev": "bin/dev", "test": "bin/rails test", "testOne": "bin/rails test <file>:<line>", "lint": "bin/rubocop", "build": "bin/rails assets:precompile", "audit": "bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error && bin/bundler-audit check --update"}, "check": {"ext": "rb", "cmd": "ruby -c {file}", "requires": "ruby"}}
 ---
 
 # Stack: Ruby on Rails

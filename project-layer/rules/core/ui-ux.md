@@ -12,7 +12,8 @@ paths:
 
 ## Source of truth
 - `DESIGN.md` (Google DESIGN.md format) holds every token and visual rule; `06-technical-docs/design/screens.md`
-  lists every screen with its states, breakpoints, and reference image. Read both before building or changing UI.
+  lists every screen with its states, breakpoints, and reference image. Read both, and the design-quality rule,
+  before building or changing UI. A DESIGN.md marked `UNCHOSEN` is the kit's starter, not a design.
 - Use tokens only: no raw hex or rgb, no ad-hoc font sizes, spacing, radii, or shadows in components. If a token is
   missing, propose a DESIGN.md change (it needs approval); never invent a style.
 - After editing DESIGN.md, run `npx @google/design.md lint DESIGN.md` and re-export tokens

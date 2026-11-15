@@ -3,7 +3,7 @@ paths:
   - "{{APP}}/**/*.go"
   - "{{APP}}/go.{mod,sum}"
   - "{{APP}}/**/*.{tmpl,gohtml}"
-kit: {"name": "Go", "commands": {"setup": "go mod download", "dev": "go run ./cmd/<app>", "test": "go test -race ./...", "testOne": "go test -race -run <TestName> ./<pkg>", "lint": "golangci-lint run", "types": "go vet ./...", "build": "go build ./...", "audit": "govulncheck ./..."}}
+kit: {"name": "Go", "commands": {"setup": "go mod download", "dev": "go run ./cmd/<app>", "test": "go test -race ./...", "testOne": "go test -race -run <TestName> ./<pkg>", "lint": "golangci-lint run", "types": "go vet ./...", "build": "go build ./...", "audit": "govulncheck ./..."}, "check": {"ext": "go", "cmd": "gofmt -e -l {file}", "requires": "gofmt"}}
 ---
 
 # Stack: Go

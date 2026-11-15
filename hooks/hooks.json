@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session-context.sh\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-start.mjs\""
           }
         ]
       }
@@ -16,16 +16,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/secret-guard.sh\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/pre-tool.mjs\""
           }
         ]
-      },
+      }
+    ],
+    "PostToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/git-guard.sh\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/post-tool.mjs\"",
+            "timeout": 30
           }
         ]
       }

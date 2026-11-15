@@ -3,8 +3,8 @@
 # context in project-kit projects and follows the setup option (ask, auto, off) everywhere else.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-GUARD="$ROOT/scripts/secret-guard.sh"
-SESSION="$ROOT/scripts/session-context.sh"
+GUARD="$ROOT/scripts/hooks/pre-tool.mjs"
+SESSION="$ROOT/scripts/hooks/session-start.mjs"
 failures=0
 expect() { # label, wanted exit code, command...
   local label="$1" want="$2"; shift 2
@@ -12,7 +12,7 @@ expect() { # label, wanted exit code, command...
   if [ "$got" != "$want" ]; then echo "    $label: exit $got, wanted $want"; failures=$((failures + 1)); fi
 }
 problem() { echo "    $1"; failures=$((failures + 1)); }
-guard() { printf '%s' "$1" | bash "$GUARD"; }
+guard() { printf '%s' "$1" | node "$GUARD"; }
 json_write() { C="$1" node -e 'process.stdout.write(JSON.stringify({tool_name:"Write",tool_input:{file_path:"/p/f",content:process.env.C}}))'; }
 json_edit() { O="$1" N="$2" node -e 'process.stdout.write(JSON.stringify({tool_name:"Edit",tool_input:{file_path:"/p/f",old_string:process.env.O,new_string:process.env.N}}))'; }
 
@@ -36,7 +36,7 @@ DATA="$TMP/plugin-data"
 # session <dir> <setup option> [source]: run the hook the way Claude Code does, outside CI.
 session() {
   printf '{"hook_event_name":"SessionStart","source":"%s"}' "${3:-startup}" |
-    env -u CI CLAUDE_PROJECT_DIR="$1" CLAUDE_PLUGIN_DATA="$DATA" CLAUDE_PLUGIN_OPTION_SETUP="$2" bash "$SESSION"
+    env -u CI CLAUDE_PROJECT_DIR="$1" CLAUDE_PLUGIN_DATA="$DATA" CLAUDE_PLUGIN_OPTION_SETUP="$2" node "$SESSION"
 }
 repo() { mkdir -p "$1" && git -C "$1" init -q; }
 
@@ -53,9 +53,9 @@ echo "$out" | grep -q "skip --project-dir \"$TMP/ask\" --data-dir \"$DATA\"" || 
 [ ! -e "$TMP/ask/CLAUDE.md" ] || problem "ask mode wrote files"
 [ -z "$(session "$TMP/ask" ask resume)" ] || problem "ask notice repeated on resume"
 [ -z "$(session "$TMP/ask" ask compact)" ] || problem "ask notice repeated after compaction"
-[ -n "$(env -u CI -u CLAUDE_PLUGIN_OPTION_SETUP CLAUDE_PROJECT_DIR="$TMP/ask" bash "$SESSION" </dev/null)" ] || problem "an unset option should behave as ask"
+[ -n "$(env -u CI -u CLAUDE_PLUGIN_OPTION_SETUP CLAUDE_PROJECT_DIR="$TMP/ask" node "$SESSION" </dev/null)" ] || problem "an unset option should behave as ask"
 [ -n "$(session "$TMP/ask" something-else)" ] || problem "an unknown option value should behave as ask"
-[ -z "$(printf '{}' | CI=true CLAUDE_PROJECT_DIR="$TMP/ask" bash "$SESSION")" ] || problem "session hook offered setup in CI"
+[ -z "$(printf '{}' | CI=true CLAUDE_PROJECT_DIR="$TMP/ask" node "$SESSION")" ] || problem "session hook offered setup in CI"
 node "$ROOT/scripts/kit.mjs" skip --project-dir "$TMP/ask" --data-dir "$DATA" >/dev/null || problem "kit.mjs skip failed"
 [ -z "$(session "$TMP/ask" ask)" ] || problem "skipped repo still got the notice"
 [ -z "$(session "$TMP/ask" auto)" ] && [ ! -e "$TMP/ask/CLAUDE.md" ] || problem "auto setup ran in a skipped repo"

@@ -1,7 +1,6 @@
 ---
 name: doctor
 description: Health check for a project-kit repo. Reports kit version drift, missing or edited kit files, TBD and unverified Profile values, secret files tracked by git, missing tools, and missing companion plugins.
-disable-model-invocation: true
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" *)
 ---
 
