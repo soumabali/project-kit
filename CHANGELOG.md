@@ -20,6 +20,10 @@ All notable changes to project-kit are documented here. The format follows
   patterns in the API and database core rules.
 - `Read(~/.cargo/credentials*)` deny rule (crates.io tokens).
 
+### Fixed
+- The kit's own CI: the session hook test for an unset `setup` option ran with `CI` set, where the hook stays
+  silent by design, so the suite failed on every push since 1.3.0. The test now clears `CI` like the others do.
+
 ## [1.3.0] - 2026-10-03
 ### Added
 - Claude Code stack for skills, subagents, hooks, plugins, and marketplaces: rules that load when Claude touches

@@ -53,7 +53,7 @@ echo "$out" | grep -q "skip --project-dir \"$TMP/ask\" --data-dir \"$DATA\"" || 
 [ ! -e "$TMP/ask/CLAUDE.md" ] || problem "ask mode wrote files"
 [ -z "$(session "$TMP/ask" ask resume)" ] || problem "ask notice repeated on resume"
 [ -z "$(session "$TMP/ask" ask compact)" ] || problem "ask notice repeated after compaction"
-[ -n "$(env -u CLAUDE_PLUGIN_OPTION_SETUP CLAUDE_PROJECT_DIR="$TMP/ask" bash "$SESSION" </dev/null)" ] || problem "an unset option should behave as ask"
+[ -n "$(env -u CI -u CLAUDE_PLUGIN_OPTION_SETUP CLAUDE_PROJECT_DIR="$TMP/ask" bash "$SESSION" </dev/null)" ] || problem "an unset option should behave as ask"
 [ -n "$(session "$TMP/ask" something-else)" ] || problem "an unknown option value should behave as ask"
 [ -z "$(printf '{}' | CI=true CLAUDE_PROJECT_DIR="$TMP/ask" bash "$SESSION")" ] || problem "session hook offered setup in CI"
 node "$ROOT/scripts/kit.mjs" skip --project-dir "$TMP/ask" --data-dir "$DATA" >/dev/null || problem "kit.mjs skip failed"
@@ -74,9 +74,11 @@ echo "$out" | grep -q 'Apps: web=nextjs:web' || problem "auto note did not list 
 echo "$out" | grep -q "uninstall --project-dir \"$TMP/auto\"" || problem "auto note did not print the undo command"
 echo "$out" | grep -q 'Next step: finish Phase 00' || problem "auto setup did not print the new STATUS.md"
 # Autonomy: the session notice appears only in auto mode.
-session "$TMP/auto" ask | grep -q 'autonomy: auto' && problem "guarded project got the auto autonomy notice"
+out="$(session "$TMP/auto" ask)"
+case "$out" in *'autonomy: auto'*) problem "guarded project got the auto autonomy notice" ;; esac
 node "$ROOT/scripts/kit.mjs" autonomy auto --project-dir "$TMP/auto" >/dev/null || problem "kit.mjs autonomy auto failed"
-session "$TMP/auto" ask | grep -q 'autonomy: auto' || problem "auto autonomy mode was not announced at session start"
+out="$(session "$TMP/auto" ask)"
+case "$out" in *'autonomy: auto'*) ;; *) problem "auto autonomy mode was not announced at session start" ;; esac
 out="$(session "$TMP/auto/web" auto)"
 echo "$out" | grep -q '\[05-progress/STATUS.md\]' || problem "a session in a subfolder of a kit project did not get STATUS.md"
 echo "$out" | grep -q 'Automatic setup' && problem "auto setup ran twice"
