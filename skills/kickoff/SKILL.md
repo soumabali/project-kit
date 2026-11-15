@@ -34,6 +34,9 @@ Skip anything the repo already answered.
   live site, none yet), data sensitivity (none, personal data, payments, health), and hosting.
 - Then, in one plain-text message: what the product is, who it's for, why it exists, and its locales. Save any
   client inputs the user shares (briefs, RFPs, meeting notes, reference links) in `01-ideas/`.
+- In a project already in `auto` autonomy mode, or when the user said not to ask (an unattended run): skip the
+  questions, take the detected apps and what the repo and `01-ideas/` say, leave the rest `TBD` in the profile, and
+  list in STATUS.md what the user still has to confirm.
 
 ## 3. Check companions
 Read `${CLAUDE_PLUGIN_ROOT}/skills/kickoff/companions.md`. Compare its list with the skills available in this
@@ -55,7 +58,9 @@ Not installed yet:
 2. If CLAUDE.md already exists, read it, tell the user what conflicts with the kit, and rerun with
    `--merge-claude-md` once they agree. After merging, remove the contradictions they approve. Existing templates
    and rules are kept; the output lists them.
-3. Run the same command without `--dry-run`.
+3. Run the same command without `--dry-run`. Add `--autonomy auto` only when the user said they develop unattended
+   (for example with `--dangerously-skip-permissions`) and want no approval prompts; `/project-kit:autonomy`
+   switches it later.
 4. Fill **What**, **Why**, and **Environments** in the CLAUDE.md profile block from the interview.
 - No Node.js available: follow the file mapping in `${CLAUDE_PLUGIN_ROOT}/skills/kickoff/manual-install.md` instead.
 

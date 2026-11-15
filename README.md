@@ -12,7 +12,7 @@ set permission rules. So project-kit has two halves:
 
 | Lives in the plugin (updates from its marketplace) | Written into each project (owned by the project) |
 |---|---|
-| 11 skills, 4 reviewer agents, 3 hooks, helper scripts, the rules and templates library | CLAUDE.md (a project profile block plus a kit-managed core block), `.claude/rules/kit/` for the stacks you use, `.claude/templates/`, permission rules in `.claude/settings.json`, tracking folders |
+| 12 skills, 4 reviewer agents, 3 hooks, helper scripts, the rules and templates library | CLAUDE.md (a project profile block plus a kit-managed core block), `.claude/rules/kit/` for the stacks you use, `.claude/templates/`, permission rules in `.claude/settings.json`, tracking folders |
 
 `/project-kit:sync` updates the kit-managed files in a project to the installed plugin version and never
 overwrites anything you edited locally.
@@ -57,7 +57,7 @@ what happens when a session starts at the root of a git repository that doesn't 
 - The option is per user: it lives under `pluginConfigs` in `~/.claude/settings.json`
   (`"project-kit@project-kit": {"options": {"setup": "auto"}}`), so it applies to every repo where the plugin is
   enabled. An organization can set it for everyone through managed settings.
-- Detection reads stack markers (`artisan`, `composer.json`, `go.mod`, `pubspec.yaml`, `*.csproj`, `pom.xml`,
+- Detection reads stack markers (`artisan`, `composer.json`, `go.mod`, `Cargo.toml`, `pubspec.yaml`, `*.csproj`, `pom.xml`,
   `package.json` dependencies, `pyproject.toml`, MCP SDK dependencies, Claude Code plugin manifests and `SKILL.md`
   files, and more) at the root, in `07-application/*`, `apps/*`, `services/*`, `packages/*`, and `plugins/*`, at
   each path a root `marketplace.json` lists, and in folders such as `frontend/`, `backend/`, and `mobile/`. Check
@@ -76,13 +76,14 @@ what happens when a session starts at the root of a git repository that doesn't 
 | `/project-kit:release` | Verify, version, tag, staging then production with approval, smoke test, record |
 | `/project-kit:add-stack` | Add an app, or rules for a stack the kit doesn't cover yet |
 | `/project-kit:sync` | Update kit-managed files to the installed version, protecting local edits |
+| `/project-kit:autonomy` | Show or switch the autonomy mode: `guarded` (asks first) or `auto` (unattended development, no prompts) |
 | `/project-kit:doctor` | Health check: drift, missing files, unverified commands, tracked secrets, missing companions |
 
 Agents: `project-kit:code-reviewer` (every task's diff), `project-kit:test-reviewer`, `project-kit:security-reviewer`,
 and `project-kit:ui-reviewer`. All four are read-only and review work they didn't write.
 
 ## Stacks
-Laravel · PHP (Symfony, WordPress, plain) · Ruby on Rails · C#/.NET · Go · Flutter · Java/Kotlin Spring Boot ·
+Laravel · PHP (Symfony, WordPress, plain) · Ruby on Rails · C#/.NET · Go · Rust · Flutter · Java/Kotlin Spring Boot ·
 Python (Django, FastAPI, Flask) · HTML/CSS · Nuxt · Next.js · Node.js/TypeScript services · MCP (combined with a
 language stack, for example `node-typescript+mcp`) · Claude Code skills, agents, hooks, and plugins (with a
 language stack and `mcp` when a plugin ships code or an MCP server) · Playwright E2E suite. Each stack's rules load only when Claude
@@ -119,6 +120,31 @@ Claude Code's sandbox for OS-level isolation. Hooks need bash: macOS's built-in 
 Git for Windows (without Git Bash, Claude Code runs hooks in PowerShell, where they can't start and the guards
 don't block).
 
+## Unattended development (autonomy)
+The kit starts every project in `guarded` mode: its ask rules prompt before destructive commands, and Claude asks
+before risky changes. Claude Code applies ask rules in every permission mode, so they also prompt under
+`claude --dangerously-skip-permissions`. For development runs nobody is watching, switch the project to `auto`:
+
+```text
+/project-kit:autonomy auto        (back: /project-kit:autonomy guarded; new project: kit.mjs install --autonomy auto)
+```
+
+| | `guarded` (default) | `auto` |
+|---|---|---|
+| Local destructive commands (`rm -rf`, `migrate:fresh`, `git reset --hard`, `compose down -v`), `git push` | ask | follow the session's permission mode |
+| Commands that print secrets, `terraform apply` and `destroy`, `kubectl delete` | ask | denied |
+| Secret files, force-pushes, skipped hooks; the secret guard and git guard hooks | denied | denied |
+| Risky changes (CLAUDE.md §5 "Ask first"), unclear requirements, a dirty tree | Claude asks and waits | Claude decides conservatively, records the decision in the task file, and continues |
+| Production, deploys, releases, pushing, secrets only you hold | Claude asks | the task is parked as `blocked` and the run moves on |
+
+- Tests, reviews, and security gates are the same in both modes. A finished task stays on its own branch, and
+  STATUS.md lists the branches to merge, the decisions to look over, and what is blocked.
+- The mode is stored in `.claude/project-kit.json` and the rules in `.claude/settings.json`, both committed, so it
+  applies to everyone in the repo. Only the kit's own rules are swapped: ask rules you wrote yourself (there, in
+  `.claude/settings.local.json`, or in `~/.claude/settings.json`) keep prompting, and `autonomy auto` lists them.
+- Use `auto` where nothing in reach is production (a development machine, a container, a worktree), ideally with
+  Claude Code's sandbox on.
+
 ## Updating
 `/plugin` → Installed → project-kit → Update now (or `claude plugin update project-kit@project-kit` in a terminal),
 then `/reload-plugins`, then `/project-kit:sync` in each project. Auto-update is off by default for third-party
@@ -126,7 +152,7 @@ marketplaces; turn it on under `/plugin` → Marketplaces.
 
 ## Project layer commands
 Skills call `scripts/kit.mjs` for you; run it directly with `node <plugin>/scripts/kit.mjs <command>`:
-`stacks`, `detect`, `install`, `add-app`, `remove-app`, `sync`, `doctor`, `uninstall` (removes only what nobody has
+`stacks`, `detect`, `install`, `add-app`, `remove-app`, `sync`, `autonomy`, `doctor`, `uninstall` (removes only what nobody has
 edited, and gives a merged CLAUDE.md its own content back), and `skip`. `--help` lists the options.
 Each command plans its changes and writes nothing if a check fails. It never overwrites a file it didn't write
 (`sync --force` saves the old one as `.orig`), never writes through a symbolic link, and undoes a half-finished run.
@@ -134,7 +160,7 @@ Each command plans its changes and writes nothing if a check fails. It never ove
 ## Developing the kit
 - `bash tests/run.sh` checks manifests, front matter, rule path matching, hooks (session context and the ask, auto,
   and off setup modes), the secret guard (credential formats, placeholders, every write path), the git guard, the
-  installer (detect, install, auto install, sync, add-app, remove-app, adopt, uninstall, doctor), helper scripts,
+  installer (detect, install, auto install, sync, autonomy modes, add-app, remove-app, adopt, uninstall, doctor), helper scripts,
   DESIGN.md lint, and `claude plugin validate --strict`. CI runs it on Linux and macOS and fails a release tag that still has an unfilled placeholder owner.
 - Bump `version` in `.claude-plugin/plugin.json`, add a CHANGELOG entry, then `claude plugin tag --push`.
 - Stack rules live in `project-layer/rules/stacks/` with a `kit:` metadata line (display name and default commands)

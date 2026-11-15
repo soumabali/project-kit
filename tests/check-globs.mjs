@@ -10,7 +10,8 @@ const run = spawnSync(process.execPath, [path.join(root, 'scripts', 'kit.mjs'), 
   '--app', 'api=laravel:07-application/api', '--app', 'web=nextjs:07-application/web', '--app', 'shop=nuxt:07-application/shop',
   '--app', 'mobile=flutter:07-application/mobile', '--app', 'svc=go:07-application/svc', '--app', 'e2e=playwright:07-application/e2e',
   '--app', 'agent=node-typescript+mcp:07-application/agent',
-  '--app', 'py=python:07-application/py', '--app', 'rails=ruby-rails:07-application/rails', '--app', 'cc=claude-code:07-application/cc'], { encoding: 'utf8' });
+  '--app', 'py=python:07-application/py', '--app', 'rails=ruby-rails:07-application/rails', '--app', 'cc=claude-code:07-application/cc',
+  '--app', 'rs=rust:07-application/rs'], { encoding: 'utf8' });
 if (run.status !== 0) { console.error(run.stderr || run.stdout); process.exit(1); }
 
 const rulesDir = path.join(tmp, '.claude', 'rules', 'kit');
@@ -44,6 +45,16 @@ const cases = {
   '07-application/mobile/lib/features/booking/presentation/widgets/booking_card.dart': ['security', 'stack-flutter', 'ui-ux'],
   '07-application/agent/src/legacy/client.cjs': ['security', 'stack-mcp', 'stack-node-typescript'],
   '07-application/svc/internal/booking/handler_test.go': ['api', 'security', 'stack-go', 'testing'],
+  '07-application/rs/src/main.rs': ['security', 'stack-rust'],
+  '07-application/rs/src/routes/bookings.rs': ['api', 'security', 'stack-rust'],
+  '07-application/rs/src/handlers.rs': ['api', 'security', 'stack-rust'],
+  '07-application/rs/src/db/bookings.rs': ['database', 'security', 'stack-rust'],
+  '07-application/rs/src/models.rs': ['database', 'security', 'stack-rust'],
+  '07-application/rs/migrations/20261001_bookings.sql': ['database', 'security'],
+  '07-application/rs/tests/api.rs': ['security', 'stack-rust', 'testing'],
+  '07-application/rs/Cargo.toml': ['security', 'stack-rust'],
+  '07-application/rs/crates/core/Cargo.toml': ['security', 'stack-rust'],
+  '07-application/rs/Cargo.lock': ['stack-rust'],
   '07-application/py/bookings/views.py': ['api', 'security', 'stack-python'],
   '07-application/py/bookings/models.py': ['database', 'security', 'stack-python'],
   '07-application/rails/config/routes.rb': ['api', 'security', 'stack-ruby-rails'],

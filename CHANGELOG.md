@@ -5,6 +5,21 @@ All notable changes to project-kit are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-15
+### Added
+- Autonomy modes for a project. `guarded` (the default) is the behavior so far. `auto` is for unattended
+  development, for example `claude --dangerously-skip-permissions`, where ask rules still prompt: the kit's ask
+  rules are removed, commands that print secrets or change remote infrastructure are denied instead, and CLAUDE.md
+  §11 tells Claude to decide conservatively, record the decision in the task file, and continue instead of asking.
+  Production, deploys, pushing, and secrets are parked as blocked tasks. Tests, reviews, and security gates don't
+  change. Switch with `/project-kit:autonomy auto|guarded` (`kit.mjs autonomy`), or install with `--autonomy auto`.
+  Switching swaps only the rules the kit added, restores them on the way back, and never re-adds a rule the project
+  deleted. The session hook announces `auto` mode, and `doctor` reports the mode and any ask rules that still prompt.
+- Rust stack: rules for Cargo projects and workspaces (errors, async, sqlx, input validation, testing, clippy,
+  `cargo audit`), detection from `Cargo.toml`, MCP detection for the `rmcp` SDK, default commands, and Rust file
+  patterns in the API and database core rules.
+- `Read(~/.cargo/credentials*)` deny rule (crates.io tokens).
+
 ## [1.3.0] - 2026-10-03
 ### Added
 - Claude Code stack for skills, subagents, hooks, plugins, and marketplaces: rules that load when Claude touches

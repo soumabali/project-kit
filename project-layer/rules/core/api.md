@@ -12,6 +12,7 @@ paths:
   - "**/{handlers,handler,resolvers,graphql,routers,viewsets}/**/*"
   - "**/{urls,views,viewsets,serializers,routers,routes}.py"
   - "**/*handler*.go"
+  - "**/{handlers,routes,router}.rs"
 ---
 
 # API Rules

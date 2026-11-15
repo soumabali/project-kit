@@ -12,7 +12,7 @@ skip() { echo "skip  $1"; skipped=$((skipped + 1)); }
 
 json_ok() { for f in "$@"; do node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$f" || { echo "    bad JSON: $f"; return 1; }; done; }
 step "JSON files parse" json_ok .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json \
-  project-layer/settings.json project-layer/legacy-offered-rules.json skills/e2e/templates/package.json \
+  project-layer/settings.json project-layer/settings-auto.json project-layer/legacy-offered-rules.json skills/e2e/templates/package.json \
   skills/e2e/templates/tsconfig.json
 step "front matter of skills, agents, rules" node tests/check-frontmatter.mjs
 step "rule paths load for the right files" node tests/check-globs.mjs

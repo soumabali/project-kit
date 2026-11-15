@@ -13,7 +13,8 @@
 4. CLAUDE.md: copy `project-layer/CLAUDE.md`; replace `{{PROJECT_NAME}}`, `{{KIT_VERSION}}` (the plugin version),
    and the `{{APP_ROWS}}` and `{{COMMAND_ROWS}}` table rows. If AGENTS.md exists, put `@AGENTS.md` on the first line.
 5. Merge `project-layer/settings.json` into `.claude/settings.json`: add missing `permissions.deny` and
-   `permissions.ask` entries, and keep `Read(!.env.example)` last in `deny`.
+   `permissions.ask` entries, and keep `Read(!.env.example)` last in `deny`. For `auto` autonomy, skip the ask
+   entries and add the deny entries of `project-layer/settings-auto.json` instead.
 6. Create `05-progress/STATUS.md` and `05-progress/log.md` from the templates, and `CHANGELOG.md` from
    `changelog.md` if missing.
 7. Append the missing lines of the kit block to `.gitignore`: `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`,

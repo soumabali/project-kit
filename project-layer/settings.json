@@ -30,6 +30,7 @@
       "Read(~/.netrc)",
       "Read(~/.git-credentials)",
       "Read(~/.pypirc)",
+      "Read(~/.cargo/credentials*)",
       "Read(~/.composer/auth.json)",
       "Read(~/.config/composer/auth.json)",
       "Bash(git commit *--no-verify*)",

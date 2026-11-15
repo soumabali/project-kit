@@ -14,6 +14,9 @@ KIT="$(cd "$(dirname "$0")" && pwd)/kit.mjs"
 DATA="${CLAUDE_PLUGIN_DATA:-}"
 
 print_context() {
+  if grep -Eq '"autonomy"[[:space:]]*:[[:space:]]*"auto"' .claude/project-kit.json 2>/dev/null; then
+    echo "[project-kit] autonomy: auto (unattended development). Don't stop to ask or wait for approval: decide, record the decision in the task file, and continue, as CLAUDE.md §11 says. Its never-list still holds (production, deploys, pushing, secrets)."
+  fi
   if [ -f 05-progress/STATUS.md ]; then
     echo "[05-progress/STATUS.md]"
     head -c 6000 05-progress/STATUS.md

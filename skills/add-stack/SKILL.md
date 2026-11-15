@@ -1,6 +1,6 @@
 ---
 name: add-stack
-description: Add rules for a stack the kit doesn't cover yet (for example Rust, Swift, Kotlin Android, Elixir, Astro, SvelteKit) or for a new app in this project, built from the framework's official docs.
+description: Add rules for a stack the kit doesn't cover yet (for example Swift, Kotlin Android, Elixir, Astro, SvelteKit) or for a new app in this project, built from the framework's official docs.
 disable-model-invocation: true
 argument-hint: "<stack-name> [app-path]"
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" *)

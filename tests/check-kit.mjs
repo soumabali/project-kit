@@ -153,17 +153,20 @@ const detected = (d) => {
   write(d, 'site/index.html', '<!doctype html>\n');
   write(d, 'apps/android/build.gradle.kts', '');
   write(d, 'apps/android/app/src/main/AndroidManifest.xml', '<manifest/>');
-  write(d, 'apps/engine/Cargo.toml', '[package]\nname = "engine"\n');
+  write(d, 'apps/engine/Cargo.toml', '[package]\nname = "engine"\n\n[dependencies]\naxum = "0.8"\n');
+  write(d, 'apps/bridge/Cargo.toml', '[package]\nname = "bridge"\n\n[dependencies]\nrmcp = { version = "0.8", features = ["server"] }\n');
+  write(d, 'apps/live/mix.exs', '');
   write(d, 'apps/we"ird/go.mod', 'module weird\n');
   const want = [
     'agent=node-typescript+mcp:apps/agent', 'api=laravel:07-application/api', 'assistant=python+mcp:services/assistant',
-    'billing=go:services/billing', 'catalog=java-spring:services/catalog', 'e2e=playwright:e2e', 'git=python:services/git',
+    'billing=go:services/billing', 'bridge=rust+mcp:apps/bridge', 'catalog=java-spring:services/catalog', 'e2e=playwright:e2e',
+    'engine=rust:apps/engine', 'git=python:services/git',
     'mobile=flutter:mobile', 'payments=dotnet+mcp:services/payments', 'shop=ruby-rails:services/shop',
     'site=html-css:site', 'tools=node-typescript:apps/tools', 'web=nextjs:07-application/web',
   ].join(' ');
   const got = detected(d);
   check(got.apps === want, `detect found:\n      ${got.apps}\n    wanted:\n      ${want}`);
-  check(got.notes.some(n => n.startsWith('apps/android: Android app')) && got.notes.some(n => n.startsWith('apps/engine: Rust')), `detect notes: ${got.notes}`);
+  check(got.notes.some(n => n.startsWith('apps/android: Android app')) && got.notes.some(n => n.startsWith('apps/live: Elixir')), `detect notes: ${got.notes}`);
   check(got.notes.some(n => n.startsWith('apps/we"ird: skipped')), 'a folder name unsafe for globs should be skipped with a note');
   const human = kit(d, 'detect');
   check(/Install flags: --app api=laravel:07-application\/api/.test(human.stdout), 'detect should print install flags');
@@ -528,6 +531,55 @@ const snapshot = (dir) => {
   check(i.status === 0 && read(p, 'CLAUDE.md').includes('Claude Code skills, agents, hooks, and plugins') && fs.existsSync(path.join(p, '.claude/rules/kit/stack-claude-code.md')), `installing a plugin repo failed: ${i.stdout}${i.stderr}`);
   fs.rmSync(p, { recursive: true, force: true });
   fs.rmSync(q, { recursive: true, force: true });
+}
+
+// Autonomy: auto mode swaps the kit's ask rules for a few deny rules, keeps the project's own rules, and switching
+// back restores the ask rules except the ones the project had deleted by hand.
+{
+  const d = fresh();
+  write(d, '.claude/settings.json', JSON.stringify({ permissions: { ask: ['Bash(make deploy*)'], deny: ['Bash(*kubectl delete*)'] } }));
+  check(kit(d, 'install', '--app', 'svc=rust:07-application/svc').status === 0, 'install for the autonomy checks failed');
+  const perms = () => JSON.parse(read(d, '.claude/settings.json')).permissions;
+  const manifest = () => JSON.parse(read(d, '.claude/project-kit.json'));
+  check(manifest().autonomy === 'guarded' && perms().ask.includes('Bash(rm -rf *)') && !perms().deny.includes('Bash(env)'), 'install should default to guarded');
+  check(read(d, 'CLAUDE.md').includes('| svc | `07-application/svc` | Rust |') && perms().deny.includes('Read(~/.cargo/credentials*)'), 'Rust app row or cargo credentials rule missing');
+  check(/autonomy: guarded/.test(kit(d, 'autonomy').stdout), 'autonomy with no argument should print the mode');
+  // The project deletes one kit ask rule by hand; it must not come back later.
+  const s = JSON.parse(read(d, '.claude/settings.json'));
+  s.permissions.ask = s.permissions.ask.filter(r => r !== 'Bash(git clean *)');
+  write(d, '.claude/settings.json', JSON.stringify(s, null, 2));
+  const dry = kit(d, 'autonomy', 'auto', '--dry-run');
+  check(dry.status === 0 && manifest().autonomy === 'guarded' && perms().ask.includes('Bash(rm -rf *)'), `autonomy --dry-run changed files: ${dry.stdout}${dry.stderr}`);
+  const a = kit(d, 'autonomy', 'auto');
+  check(a.status === 0 && manifest().autonomy === 'auto', `autonomy auto failed: ${a.stdout}${a.stderr}`);
+  check(JSON.stringify(perms().ask) === '["Bash(make deploy*)"]', `auto should leave only the project's own ask rule: ${JSON.stringify(perms().ask)}`);
+  check(/1 ask rule\(s\) of your own remain.*make deploy/.test(a.stdout), `auto should report the remaining ask rule: ${a.stdout}`);
+  check(perms().deny.includes('Bash(env)') && perms().deny.includes('Bash(*terraform destroy*)') && perms().deny.includes('Read(.env)'), 'auto should deny secret-printing and remote infrastructure commands');
+  check(perms().deny.includes('Bash(git push *--force*)') && perms().deny.at(-1) === 'Read(!.env.example)', 'auto must keep the force-push rule and the .env.example exception last');
+  check(/autonomy guarded → auto/.test(read(d, '05-progress/log.md')), 'the mode change should be logged');
+  const s1 = kit(d, 'sync');
+  check(s1.status === 0 && !perms().ask.includes('Bash(rm -rf *)'), `sync in auto mode brought ask rules back: ${s1.stdout}`);
+  check(/ok\s+autonomy: auto/.test(kit(d, 'doctor').stdout) && /1 ask rule\(s\).*still prompt/.test(kit(d, 'doctor').stdout), 'doctor should report auto mode and the remaining ask rule');
+  const g = kit(d, 'autonomy', 'guarded');
+  check(g.status === 0 && manifest().autonomy === 'guarded', `autonomy guarded failed: ${g.stdout}${g.stderr}`);
+  check(perms().ask.includes('Bash(rm -rf *)') && perms().ask.includes('Bash(make deploy*)') && perms().ask.includes('Bash(*kubectl delete*)'), 'guarded should restore the kit ask rules');
+  check(!perms().ask.includes('Bash(git clean *)'), 'a kit ask rule the project deleted came back');
+  check(!perms().deny.includes('Bash(env)') && perms().deny.includes('Bash(*kubectl delete*)'), "guarded should remove the auto deny rules but keep the project's own deny rule");
+  check(kit(d, 'autonomy', 'yolo').status === 2, 'an unknown mode should be refused');
+  kit(d, 'autonomy', 'auto');
+  const u = kit(d, 'uninstall');
+  check(u.status === 0 && JSON.stringify(JSON.parse(read(d, '.claude/settings.json')).permissions) === JSON.stringify({ ask: ['Bash(make deploy*)'], deny: ['Bash(*kubectl delete*)'] }),
+    `uninstall after a mode change should leave the project's own rules: ${read(d, '.claude/settings.json')}`);
+  fs.rmSync(d, { recursive: true, force: true });
+
+  // Installed in auto mode from the start, then switched to guarded.
+  const e = fresh();
+  const i = kit(e, 'install', '--autonomy', 'auto', '--app', 'api=go:api');
+  const ep = () => JSON.parse(read(e, '.claude/settings.json')).permissions;
+  check(i.status === 0 && !ep().ask && ep().deny.includes('Bash(printenv*)'), `install --autonomy auto: ${i.stdout}${i.stderr}`);
+  check(kit(e, 'autonomy', 'guarded').status === 0 && ep().ask.includes('Bash(git push *)') && !ep().deny.includes('Bash(printenv*)'), 'auto install did not switch to guarded');
+  check(kit(e, 'install', '--autonomy', 'never', '--app', 'x=go:x', '--force').status === 2, 'install should refuse an unknown autonomy mode');
+  fs.rmSync(e, { recursive: true, force: true });
 }
 
 if (failures) { console.error(`  ${failures} kit check(s) failed`); process.exit(1); }

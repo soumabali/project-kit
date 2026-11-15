@@ -1,0 +1,18 @@
+{
+  "description": "Deny rules project-kit adds in auto autonomy mode, in place of its ask rules: nobody is there to answer a prompt, so commands that print secrets or change remote infrastructure are blocked. Local destructive commands (rm -rf, migrate:fresh, git reset --hard, compose down -v) are left to the permission mode.",
+  "permissions": {
+    "deny": [
+      "Bash(env)",
+      "Bash(printenv*)",
+      "Bash(*compose config*)",
+      "Bash(*config:show*)",
+      "Bash(*credentials:show*)",
+      "Bash(*secrets:reveal*)",
+      "Bash(*kubectl get secret*)",
+      "Bash(*get-secret-value*)",
+      "Bash(*terraform apply*)",
+      "Bash(*terraform destroy*)",
+      "Bash(*kubectl delete*)"
+    ]
+  }
+}

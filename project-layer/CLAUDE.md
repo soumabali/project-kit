@@ -154,4 +154,22 @@ work. Only `/project-kit:release` turns `[Unreleased]` into a version.
   than one implementer subagent.
 - Never bulk-read `04-tasks/` or `log.md`. State lives in files, so suggest `/clear` between tasks.
 - Parallel worktrees each own one task file; the main checkout owns STATUS.md.
+
+### 11. Autonomy
+`autonomy` in `.claude/project-kit.json` (the session hook prints it when it is `auto`; `/project-kit:autonomy`
+changes it) decides what happens wherever this file, a rule, or a skill says to ask, confirm, or get approval.
+- `guarded` (the default): stop and ask, as written.
+- `auto` is unattended development: nobody is there to answer, so a question stalls the run. Don't ask and don't
+  wait. Take the most conservative reading that still finishes the task, write each such call as one line under
+  Decisions in the task's Result (what, why, how to undo), and continue. For the "Ask first" list in §5, set
+  `approval_required: true` and do the work on the task branch; the reviewers and gates stand in for the approval.
+  A dirty tree or a mismatched branch is never discarded: commit it as `wip` on its own branch, then continue. A
+  finished task stays on its branch, unmerged; cut the next task from it so the work stacks in order.
+- Every test, review, and security gate applies in both modes. `auto` changes who decides, not what is checked.
+- `auto` never covers: staging, production, or real user data; deploys and releases; pushing (unless the request
+  that started the run asked for it) or rewriting pushed history; a secret or account only the user can provide;
+  waiving a security rule; destructive commands outside this repo and its local docker services. Prepare what
+  you can, set the task `blocked` with the reason, and move to the next unblocked task.
+- End an `auto` run by listing in STATUS.md the branches awaiting merge, the decisions worth a second look, and
+  every blocked task.
 <!-- project-kit:core:end -->

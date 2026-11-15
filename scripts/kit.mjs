@@ -48,7 +48,11 @@ const GITIGNORE_LINES = [
 ];
 // Two task branches that both append to the log merge without a conflict.
 const GITATTRIBUTES_LINES = ['05-progress/log.md merge=union', 'CHANGELOG.md merge=union'];
-const OPTIONS = ['project-dir', 'data-dir', 'name', 'app'];
+const OPTIONS = ['project-dir', 'data-dir', 'name', 'app', 'autonomy'];
+// guarded: the kit's ask rules prompt before destructive commands. auto: unattended development (for example
+// claude --dangerously-skip-permissions, where ask rules still prompt): no ask rules, and what must never run
+// unattended is denied instead.
+const AUTONOMY = ['guarded', 'auto'];
 // Files that hold secrets when committed (doctor fails on them); .env.example and similar templates are fine.
 const SECRET_FILE = new RegExp([
   String.raw`(^|/)\.env(\.(?!(example|sample|template|dist|defaults)$)[^/]+)?$`,
@@ -124,6 +128,9 @@ const CORE = loadDir(path.join(LAYER, 'rules', 'core'));
 const KIT_SETTINGS = JSON.parse(read(path.join(LAYER, 'settings.json')));
 // Manifests from before 1.1.0 don't record which permission rules the kit offered; this frozen list stands in.
 const LEGACY_OFFERED = JSON.parse(read(path.join(LAYER, 'legacy-offered-rules.json')));
+// Deny rules that replace the ask rules in auto mode: commands that print secrets or change remote infrastructure.
+const AUTO_DENY = JSON.parse(read(path.join(LAYER, 'settings-auto.json'))).permissions.deny;
+const autonomyOf = m => (AUTONOMY.includes(m && m.autonomy) ? m.autonomy : 'guarded');
 
 function expandApp(pattern, appPath) {
   if (appPath === '.') return pattern.replace('{{APP}}/', '');
@@ -180,7 +187,7 @@ const JS_APP_DEPS = [
   'react', 'vue', 'svelte', '@angular/core', 'preact', 'solid-js', 'lit', 'astro', '@sveltejs/kit', 'express',
   'fastify', 'koa', 'hono', '@nestjs/core', 'electron',
 ];
-const UNSUPPORTED = [['Cargo.toml', 'Rust'], ['mix.exs', 'Elixir'], ['Package.swift', 'Swift'], ['Gemfile', 'Ruby without Rails'], ['deno.json', 'Deno']];
+const UNSUPPORTED = [['mix.exs', 'Elixir'], ['Package.swift', 'Swift'], ['Gemfile', 'Ruby without Rails'], ['deno.json', 'Deno']];
 const MCP_SDKS = [ // [manifest file, dependency on an MCP SDK]
   [/^package\.json$/, /"(@modelcontextprotocol\/(?!inspector")[\w.-]+|fastmcp|mcp-framework)"\s*:/],
   [/^(pyproject\.toml|Pipfile|requirements[\w.-]*\.txt)$/, /(^|["'])(mcp|fastmcp)(\[[\w,\s-]*\])?\s*([<>=!~;,"'#]|$)/m],
@@ -188,6 +195,7 @@ const MCP_SDKS = [ // [manifest file, dependency on an MCP SDK]
   [/\.(cs|fs)proj$/, /"ModelContextProtocol/],
   [/^(pom\.xml|build\.gradle(\.kts)?)$/, /io\.modelcontextprotocol|spring-ai-(starter-)?mcp/],
   [/^Gemfile$/, /^\s*gem\s+["'](mcp|fast-mcp)["']/m],
+  [/^Cargo\.toml$/, /^\s*(rmcp|rust-mcp-sdk)\s*=|^\[(workspace\.)?dependencies\.(rmcp|rust-mcp-sdk)\]/m],
   [/^composer\.json$/, /"(mcp\/sdk|php-mcp\/[\w-]+|laravel\/mcp)"\s*:/],
 ];
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[^a-z0-9]+|-+$/g, '') || 'app'; }
@@ -211,6 +219,7 @@ function detectDir(dir, allowHtml, plugin = false) {
   else if (exists(path.join(dir, 'config', 'application.rb')) || /^\s*gem\s+["']rails["']/m.test(textOf(path.join(dir, 'Gemfile')))) stack = 'ruby-rails';
   else if (some(/\.(sln|slnx|csproj|fsproj)$/)) stack = 'dotnet';
   else if (has('go.mod', 'go.work')) stack = 'go';
+  else if (has('Cargo.toml')) stack = 'rust';
   else if (has('pubspec.yaml')) stack = 'flutter';
   else if (has('pom.xml', 'build.gradle', 'build.gradle.kts')) { if (!android) stack = 'java-spring'; }
   else if (dep('nuxt') || some(/^nuxt\.config\./)) stack = 'nuxt';
@@ -324,23 +333,35 @@ function cutBlock(text, blk) { return text.slice(0, blk.start) + text.slice(blk.
 const isNegation = r => r.startsWith('Read(!');
 // The kit's permission rules for these apps: the shared list, plus Composer's auth.json (registry tokens) for each
 // PHP app. A bare `auth.json` rule would also hide translation files of that name, so these are anchored per app.
-function kitPermissions(apps) {
+function kitPermissions(apps, autonomy) {
   const php = (apps || []).filter(a => a.stacks.includes('php') || a.stacks.includes('laravel'));
   const auth = [...new Set(php.map(a => `Read(/${a.path === '.' ? '' : `${a.path}/`}auth.json)`))];
   const deny = KIT_SETTINGS.permissions.deny || [];
-  return { deny: [...deny.filter(r => !isNegation(r)), ...auth, ...deny.filter(isNegation)], ask: KIT_SETTINGS.permissions.ask || [] };
+  const auto = autonomy === 'auto';
+  return {
+    deny: [...deny.filter(r => !isNegation(r)), ...(auto ? AUTO_DENY : []), ...auth, ...deny.filter(isNegation)],
+    ask: auto ? [] : KIT_SETTINGS.permissions.ask || [],
+  };
 }
 // Adds kit permission rules the project doesn't have yet, skipping any the kit offered before (the user may have
 // removed them on purpose). The user's own rules keep their order: a "!" pattern only carves exceptions out of rules
 // listed before it, so new rules go in front of the user's negations and new negations go last.
-function mergeSettings(existing, offered, apps) {
-  const kit = kitPermissions(apps);
+// `drop` lists rules to take out first: the ones a change of autonomy mode retires.
+function mergeSettings(existing, offered, apps, autonomy, drop) {
+  const kit = kitPermissions(apps, autonomy);
   const out = existing ? JSON.parse(JSON.stringify(existing)) : {};
   const hadPermissions = Boolean(out.permissions);
   out.permissions = out.permissions || {};
   const added = { schema: !out.$schema };
+  const dropped = { deny: [], ask: [] };
   for (const key of ['deny', 'ask']) {
-    const cur = Array.isArray(out.permissions[key]) ? out.permissions[key] : [];
+    let cur = Array.isArray(out.permissions[key]) ? out.permissions[key] : [];
+    const retire = ((drop && drop[key]) || []).filter(r => !kit[key].includes(r));
+    dropped[key] = cur.filter(r => retire.includes(r));
+    if (dropped[key].length) {
+      cur = cur.filter(r => !retire.includes(r));
+      if (cur.length) out.permissions[key] = cur; else delete out.permissions[key];
+    }
     const fresh = kit[key].filter(r => !cur.includes(r) && !((offered && offered[key]) || []).includes(r));
     added[key] = fresh;
     if (!fresh.length) continue;
@@ -350,10 +371,10 @@ function mergeSettings(existing, offered, apps) {
   }
   if (!hadPermissions && !Object.keys(out.permissions).length) delete out.permissions;
   const merged = out.$schema ? out : { $schema: KIT_SETTINGS.$schema, ...out };
-  return { merged, added };
+  return { merged, added, dropped };
 }
-function offeredRules(previous, apps) {
-  const kit = kitPermissions(apps);
+function offeredRules(previous, apps, autonomy) {
+  const kit = kitPermissions(apps, autonomy);
   const out = {};
   for (const key of ['deny', 'ask']) out[key] = [...new Set([...((previous && previous[key]) || []), ...kit[key]])];
   return out;
@@ -437,7 +458,7 @@ function checkTarget(root, rel) {
 }
 
 // Plans the settings merge; returns the rules it adds and, when it creates the file, the content.
-function writeSettings(root, w, offered, apps) {
+function writeSettings(root, w, offered, apps, autonomy, drop) {
   const abs = path.join(root, SETTINGS);
   let existing = null;
   let raw = null;
@@ -446,11 +467,11 @@ function writeSettings(root, w, offered, apps) {
     try { existing = JSON.parse(raw); } catch { fail(`${SETTINGS} is not valid JSON; fix it first (nothing was changed)`); }
     if (!existing || typeof existing !== 'object' || Array.isArray(existing)) fail(`${SETTINGS} is not a JSON object; fix it first (nothing was changed)`);
   }
-  const { merged, added } = mergeSettings(existing, offered, apps);
-  if (existing && JSON.stringify(existing) === JSON.stringify(merged)) { w.note(`unchanged ${SETTINGS}`); return { added, created: null }; }
+  const { merged, added, dropped } = mergeSettings(existing, offered, apps, autonomy, drop);
+  if (existing && JSON.stringify(existing) === JSON.stringify(merged)) { w.note(`unchanged ${SETTINGS}`); return { added, dropped, created: null }; }
   const next = jsonText(merged, raw);
   w.write(SETTINGS, next, existing ? 'merged' : 'created', existing ? eolOf(abs) : '\n');
-  return { added, created: existing ? null : next };
+  return { added, dropped, created: existing ? null : next };
 }
 
 // Adds the missing lines to the kit block of .gitignore or .gitattributes (creating the block, and the file when
@@ -567,6 +588,8 @@ function cmdInstall(args) {
   }
   const names = apps.map(a => a.name);
   if (new Set(names).size !== names.length) fail('app names must be unique');
+  const autonomy = args.autonomy || 'guarded';
+  if (!AUTONOMY.includes(autonomy)) fail(`unknown --autonomy "${autonomy}"; use ${AUTONOMY.join(' or ')}`);
   const name = (args.name || path.basename(root)).replace(/[<>`|\r\n]/g, '').trim() || 'Project';
   const w = makeWriter(root, args['dry-run']);
   const created = {};
@@ -611,7 +634,7 @@ function cmdInstall(args) {
   const log = appendLog(root, w, logLine);
   if (log !== null) created['05-progress/log.md'] = sha(log);
   if (!present(path.join(root, 'CHANGELOG.md'))) create('CHANGELOG.md', read(path.join(LAYER, 'templates', 'changelog.md')));
-  const settings = writeSettings(root, w, null, apps);
+  const settings = writeSettings(root, w, null, apps, autonomy);
   if (settings.created) created[SETTINGS] = sha(settings.created);
   const gitignore = writeBlock(root, w, '.gitignore', GITIGNORE_LINES);
   if (gitignore.created) created['.gitignore'] = sha(gitignore.created);
@@ -619,17 +642,18 @@ function cmdInstall(args) {
   if (gitattributes.created) created['.gitattributes'] = sha(gitattributes.created);
 
   w.write(MANIFEST, manifestText({
-    kitVersion: KIT_VERSION, project: name, apps, files: hashes, coreHash: sha(tpl.core), profileHash: sha(profile),
-    created, settingsAdded: settings.added, settingsOffered: offeredRules(null, apps), gitignoreAdded: gitignore.added,
+    kitVersion: KIT_VERSION, project: name, autonomy, apps, files: hashes, coreHash: sha(tpl.core), profileHash: sha(profile),
+    created, settingsAdded: settings.added, settingsOffered: offeredRules(null, apps, autonomy), gitignoreAdded: gitignore.added,
     gitattributesAdded: gitattributes.added, installedAt: today(), updatedAt: today(),
   }), null);
   w.commit();
   console.log(`${args['dry-run'] ? 'Dry run: would install' : 'Installed'} project-kit v${KIT_VERSION} in ${root}`);
   console.log(`Apps: ${apps.length ? apps.map(fmtApp).join(', ') : 'none detected'}`);
+  if (autonomy === 'auto') console.log('Autonomy: auto (no ask rules; secret-printing and remote infrastructure commands are denied)');
   console.log(w.log.map(l => `  ${l}`).join('\n'));
 }
 
-function syncInto(root, manifest, args, w) {
+function syncInto(root, manifest, args, w, drop) {
   const desired = renderKitFiles(manifest.apps);
   const files = {};
   const skipped = [];
@@ -690,7 +714,7 @@ function syncInto(root, manifest, args, w) {
     w.note('skipped   CLAUDE.md core block (edited locally; put project rules outside the block, or rerun with --force)');
   }
   if (text !== null && next !== text) w.write('CLAUDE.md', next, 'updated', eolOf(claudeAbs));
-  const settings = writeSettings(root, w, manifest.settingsOffered || LEGACY_OFFERED, manifest.apps);
+  const settings = writeSettings(root, w, manifest.settingsOffered || LEGACY_OFFERED, manifest.apps, autonomyOf(manifest), drop);
   // New ignore and merge lines reach existing projects too. Installs from before 1.1.0 didn't record what they
   // created, so for those only files that already exist are extended.
   const canCreate = Boolean(manifest.created);
@@ -700,21 +724,27 @@ function syncInto(root, manifest, args, w) {
   if (gitignore.created) created['.gitignore'] = sha(gitignore.created);
   if (gitattributes.created) created['.gitattributes'] = sha(gitattributes.created);
   return {
-    files, coreHash, profileHash, profileUpdated, settingsAdded: settings.added, skipped, created,
+    files, coreHash, profileHash, profileUpdated, settingsAdded: settings.added, settingsDropped: settings.dropped, skipped, created,
     gitignoreAdded: gitignore.added, gitattributesAdded: gitattributes.added,
   };
 }
 
 const union = (a, b) => [...new Set([...(a || []), ...(b || [])])];
+const minus = (a, b) => (a || []).filter(r => !(b || []).includes(r));
+// Rules a mode change took out are no longer "added" or "offered", so switching back restores them, while a rule
+// the project deleted by hand stays offered and never comes back.
 function manifestAfter(manifest, res) {
+  const gone = res.settingsDropped || {};
   const settingsAdded = manifest.settingsAdded && {
     schema: Boolean(manifest.settingsAdded.schema),
-    deny: union(manifest.settingsAdded.deny, res.settingsAdded.deny),
-    ask: union(manifest.settingsAdded.ask, res.settingsAdded.ask),
+    deny: union(minus(manifest.settingsAdded.deny, gone.deny), res.settingsAdded.deny),
+    ask: union(minus(manifest.settingsAdded.ask, gone.ask), res.settingsAdded.ask),
   };
+  const before = manifest.settingsOffered || LEGACY_OFFERED;
+  const offered = { deny: minus(before.deny, gone.deny), ask: minus(before.ask, gone.ask) };
   return {
     ...manifest, kitVersion: KIT_VERSION, files: res.files, coreHash: res.coreHash, profileHash: res.profileHash,
-    settingsAdded, settingsOffered: offeredRules(manifest.settingsOffered || LEGACY_OFFERED, manifest.apps),
+    settingsAdded, settingsOffered: offeredRules(offered, manifest.apps, autonomyOf(manifest)),
     created: manifest.created && { ...manifest.created, ...res.created },
     gitignoreAdded: union(manifest.gitignoreAdded, res.gitignoreAdded),
     gitattributesAdded: union(manifest.gitattributesAdded, res.gitattributesAdded),
@@ -771,6 +801,54 @@ function cmdRemoveApp(args) {
   const res = changeApps(args, { ...manifest, apps: manifest.apps.filter(a => !names.includes(a.name)) }, `remove ${names.join(', ')}`);
   if (res.profileUpdated) console.log('The Project Profile tables in CLAUDE.md are updated.');
   else console.log(`\nRemove the rows for ${names.join(', ')} from the Project Profile tables in CLAUDE.md.`);
+}
+
+// Shows or changes the autonomy mode. Changing it swaps the kit's own permission rules (the ask rules in guarded
+// mode, the extra deny rules in auto mode) and syncs, so CLAUDE.md has the section that explains the mode. Rules
+// the project wrote itself are never removed.
+function askRulesIn(root) {
+  const s = jsonOf(path.join(root, SETTINGS));
+  const ask = s && s.permissions && s.permissions.ask;
+  return Array.isArray(ask) ? ask : [];
+}
+function cmdAutonomy(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  const manifest = loadManifest(root);
+  const from = autonomyOf(manifest);
+  const to = args._[1];
+  if (!to) {
+    console.log(`autonomy: ${from}`);
+    console.log(from === 'auto'
+      ? '  Unattended development: the kit adds no ask rules; secret-printing and remote infrastructure commands are denied.'
+      : "  The kit's ask rules prompt before destructive commands, also under --dangerously-skip-permissions.");
+    console.log(`  Change it with: node kit.mjs autonomy ${from === 'auto' ? 'guarded' : 'auto'}`);
+    return;
+  }
+  if (!AUTONOMY.includes(to)) fail(`unknown mode "${to}"; use ${AUTONOMY.join(' or ')}`);
+  const added = manifest.settingsAdded;
+  const drop = to === 'auto'
+    ? { ask: added ? added.ask || [] : union(KIT_SETTINGS.permissions.ask, LEGACY_OFFERED.ask) }
+    : { deny: added ? AUTO_DENY.filter(r => (added.deny || []).includes(r)) : AUTO_DENY };
+  const w = makeWriter(root, args['dry-run']);
+  const next = { ...manifest, autonomy: to };
+  const res = syncInto(root, next, args, w, drop);
+  if (from !== to) appendLog(root, w, `${stamp()} kit autonomy ${from} → ${to}`);
+  w.write(MANIFEST, manifestText(manifestAfter(next, res)), null);
+  w.commit();
+  console.log(`${args['dry-run'] ? 'Dry run: autonomy' : 'Autonomy'} ${from} → ${to}`);
+  const gone = res.settingsDropped;
+  if (gone.ask.length) console.log(`  removed ${gone.ask.length} ask rule(s) the kit had added to ${SETTINGS}`);
+  if (gone.deny.length) console.log(`  removed ${gone.deny.length} deny rule(s) that only auto mode uses`);
+  if (res.settingsAdded.ask.length) console.log(`  added ${res.settingsAdded.ask.length} ask rule(s)`);
+  if (res.settingsAdded.deny.length) console.log(`  added ${res.settingsAdded.deny.length} deny rule(s)`);
+  const changed = w.log.filter(l => !/^unchanged/.test(l));
+  if (changed.length) console.log(changed.map(l => `  ${l}`).join('\n'));
+  if (to === 'auto') {
+    const left = args['dry-run'] ? minus(askRulesIn(root), gone.ask) : askRulesIn(root);
+    if (left.length) console.log(`  note: ${left.length} ask rule(s) of your own remain in ${SETTINGS} and still prompt in every permission mode: ${left.join(', ')}`);
+    console.log('  Ask rules in .claude/settings.local.json and ~/.claude/settings.json prompt too; the kit never edits those.');
+  }
+  if (res.skipped.length) process.exitCode = 1;
 }
 
 // Removes what install created and nobody has edited since, gives merged files their own content back, and
@@ -902,6 +980,9 @@ function cmdDoctor(args) {
   if (manifest.apps.length) ok(`apps: ${manifest.apps.map(a => `${a.name} (${a.stacks.join('+')}) at ${a.path}`).join('; ')}`);
   else warn('no apps yet → add them with /project-kit:add-stack or /project-kit:kickoff');
   for (const a of manifest.apps) if (a.path !== '.' && !exists(path.join(root, a.path))) warn(`app folder ${a.path} does not exist yet`);
+  const autonomy = autonomyOf(manifest);
+  ok(`autonomy: ${autonomy}${autonomy === 'auto' ? ' (unattended development; no kit ask rules)' : ''}`);
+  if (autonomy === 'auto' && askRulesIn(root).length) warn(`${askRulesIn(root).length} ask rule(s) in ${SETTINGS} still prompt in every permission mode`);
 
   const desired = renderKitFiles(manifest.apps);
   let missing = 0, edited = 0;
@@ -964,11 +1045,12 @@ function cmdDoctor(args) {
 const HELP = `project-kit ${KIT_VERSION}
   node kit.mjs stacks                      list stack ids
   node kit.mjs detect [--json]             suggest apps from stack markers in the repo
-  node kit.mjs install --app <name>=<stack>[+<stack>]:<path> [--app ...] [--name "Project"] [--merge-claude-md] [--dry-run]
+  node kit.mjs install --app <name>=<stack>[+<stack>]:<path> [--app ...] [--name "Project"] [--autonomy auto] [--merge-claude-md] [--dry-run]
   node kit.mjs install --auto [--dry-run]  install with the detected apps; refuses when CLAUDE.md exists
   node kit.mjs add-app --app <name>=<stack>:<path> [--dry-run]
   node kit.mjs remove-app <name> [<name> ...] [--dry-run]
   node kit.mjs sync [--dry-run] [--force]
+  node kit.mjs autonomy [guarded|auto] [--dry-run]   show or change the mode; auto is for unattended development
   node kit.mjs doctor
   node kit.mjs uninstall [--data-dir <plugin data dir>] [--dry-run]   remove what install created and nobody edited
   node kit.mjs skip --data-dir <plugin data dir>   stop the session hook from offering setup in this repo
@@ -976,7 +1058,7 @@ Options: --project-dir <dir> (default: current directory)`;
 
 const COMMANDS = {
   stacks: cmdStacks, detect: cmdDetect, install: cmdInstall, 'add-app': cmdAddApp, 'remove-app': cmdRemoveApp,
-  sync: cmdSync, doctor: cmdDoctor, uninstall: cmdUninstall, skip: cmdSkip,
+  sync: cmdSync, autonomy: cmdAutonomy, doctor: cmdDoctor, uninstall: cmdUninstall, skip: cmdSkip,
 };
 const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];
