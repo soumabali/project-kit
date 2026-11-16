@@ -844,7 +844,7 @@ function setManifestField(args, field, allowed, explain) {
 function cmdAutonomy(args) {
   setManifestField(args, 'autonomy', AUTONOMY, {
     guarded: 'Claude asks before destructive commands and risky changes. A session can still run unattended with PROJECT_KIT_AUTONOMY=auto or --dangerously-skip-permissions.',
-    auto: "Unattended by default: nothing asks; commands that print secrets or change remote infrastructure are denied. A session can opt back in with PROJECT_KIT_AUTONOMY=guarded.",
+    auto: "Unattended by default: nothing asks; commands that print secrets, change remote infrastructure, publish, deploy, or merge are denied. A session can opt back in with PROJECT_KIT_AUTONOMY=guarded.",
   });
 }
 function cmdRigor(args) {

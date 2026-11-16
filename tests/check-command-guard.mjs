@@ -40,6 +40,23 @@ for (const c of ['sudo rm -rf /var/app', 'sudo -u deploy rm -rf releases', 'rm -
   'find . -name "*.tmp" | xargs -n 1 rm -rf', 'git -C api reset --hard', 'git --no-pager -c color.ui=false clean -fd', 'time git reset --hard', 'env FOO=1 rm -rf dist']) {
   check(guard(c) === 'ask', `guarded should ask: ${c} → ${guard(c)}`);
 }
+for (const c of ['git branch -D task-001-login', 'git branch --delete --force old', 'git checkout -- src/app.ts', 'git checkout .', 'git restore .',
+  'find . -name "*.log" -delete', 'dropdb app_test', 'npm publish', 'npx vercel deploy --prod', 'gh pr merge 12 --squash', 'cargo publish --dry-run']) {
+  check(guard(c) === 'ask', `guarded should ask: ${c} → ${guard(c)}`);
+}
+// Publishing, deploying, and merging are denied when nobody is watching; local clean-up runs.
+for (const c of ['npm publish', 'pnpm publish --access public', 'gh pr merge 12 --squash', 'gh release create v1.2.0', 'npx vercel deploy --prod', 'vercel --prod', 'netlify deploy --prod', 'firebase deploy', 'npx wrangler deploy', 'fly deploy']) {
+  check(guard(c, { mode: 'bypassPermissions' }) === 'deny', `auto should deny: ${c} → ${guard(c, { mode: 'bypassPermissions' })}`);
+}
+for (const c of ['git restore .', 'find . -name "*.log" -delete', 'git branch -D old', 'git commit -m "docs: when to run terraform apply and npm publish"',
+  'gh pr create --title "Deploy" --body "run vercel deploy --prod after kubectl delete"', 'echo "then run firebase deploy"', 'npm run build', 'gh pr view 12']) {
+  check(guard(c, { mode: 'bypassPermissions' }) === 'allow', `auto should allow: ${c} → ${guard(c, { mode: 'bypassPermissions' })}`);
+}
+// Text for people is not a command, and the safe forms of a guarded command pass.
+for (const c of ['git branch -d merged-branch', 'git branch --delete merged', 'git checkout main', 'git checkout -b task-002', 'git restore --staged src/app.ts', 'find . -name "*.log"',
+  'git commit -m "remove db:drop and migrate:fresh from the scripts"', 'gh pr comment 3 --body "do not rm -rf this, or docker system prune"', 'npm pack', 'vercel dev']) {
+  check(guard(c) === 'allow', `guarded should allow: ${c} → ${guard(c)}`);
+}
 for (const c of ['rm -f notes.txt', 'rm -r empty-dir', 'command -v rm', 'sudo apt-get install -y jq', 'git -C api status', 'env FOO=1 node server.js', 'xargs -n 1 echo']) {
   check(guard(c) === 'allow', `guarded should allow: ${c} → ${guard(c)}`);
 }

@@ -197,8 +197,8 @@ $env:PROJECT_KIT_AUTONOMY="auto"; claude          # the same in PowerShell
 
 | | `guarded` (default) | `auto` |
 |---|---|---|
-| Local destructive commands (`rm -rf`, `migrate:fresh`, `git reset --hard`, `compose down -v`), `git push` | ask | run |
-| Commands that print secrets, `terraform apply` and `destroy`, `kubectl delete` | ask | denied |
+| Local destructive commands (`rm -rf`, `find -delete`, `migrate:fresh`, `git reset --hard`, `git restore .`, `compose down -v`), `git push` | ask | run |
+| Commands that print secrets, `terraform apply` and `destroy`, `kubectl delete`, package publishing (`npm publish`, `cargo publish`), deploys (`vercel`, `netlify`, `firebase`, `wrangler`, `fly`), `gh pr merge`, `gh release create` | ask | denied |
 | Secret files, force-pushes, skipped hooks; the secret guard and git guard | denied | denied |
 | Risky changes (CLAUDE.md §5 "Ask first"), unclear requirements, a dirty tree | Claude asks and waits | Claude decides conservatively, records the decision in the task file, and continues |
 | Production, deploys, releases, pushing, secrets only you hold | Claude asks | the task is parked as `blocked` and the run moves on |

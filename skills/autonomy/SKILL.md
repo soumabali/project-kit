@@ -19,7 +19,7 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" *)
      `git reset --hard`, `compose down -v`, `git push`) and commands that print secrets; Claude asks before the
      changes CLAUDE.md §5 lists.
    - `auto`: those commands run without a prompt, except that commands printing secrets, `terraform apply` and
-     `destroy`, and `kubectl delete` are denied. Claude decides instead of asking and records each decision in the
+     `destroy`, `kubectl delete`, package publishing, deploys, and `gh pr merge` are denied. Claude decides instead of asking and records each decision in the
      task file; production, deploys, pushing, and secrets still wait for the user (CLAUDE.md §11).
    - Both: the secret guard, the git guard (force-pushes, skipped hooks), and the deny rules for secret files stay.
 4. If the command reports ask rules left in `.claude/settings.json`, they prompt in every mode: run

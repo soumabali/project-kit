@@ -4,6 +4,8 @@ All notable changes to project-kit are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [1.5.1] - 2026-11-16
 ### Fixed
 - Quick check: the edited file's name now reaches the check command exactly as written. A name with `$` (a route
   file such as `$postId.tsx`) was expanded by the shell, so the check ran on the wrong path and reported a failure
@@ -22,6 +24,14 @@ All notable changes to project-kit are documented here. The format follows
 - Maintenance workflow: the evals job installs the Claude Code version pinned in `ci.yml`; its lookup matched
   nothing, so it installed the latest release instead.
 - Session hook: STATUS.md is cut at a character, not in the middle of one.
+- Command guard: `git branch -d` (the safe delete) no longer asks; only `-D` and `--delete --force` do. A phrase
+  inside a commit message, a `gh` body, or an `echo`, such as "terraform apply", is no longer taken for the command.
+
+### Added
+- Command guard, asks in guarded and runs in auto: `git checkout -- <path>`, `git checkout .`, `git restore .`,
+  `find … -delete`, and `dropdb`.
+- Command guard, asks in guarded and is denied in auto: package publishing (`npm`, `pnpm`, `yarn`, `cargo`, `gem`,
+  `twine`), deploys (`vercel`, `netlify`, `firebase`, `wrangler`, `fly`), `gh pr merge`, and `gh release create`.
 
 ## [1.5.0] - 2026-11-16
 ### Added
