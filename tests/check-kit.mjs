@@ -573,7 +573,9 @@ const snapshot = (dir) => {
   const u = kit(d, 'uninstall');
   check(u.status === 0 && JSON.parse(read(d, '.claude/settings.json')).permissions.deny.includes('Bash(my-own-deny)'), `uninstall dropped the project's own rule: ${u.stdout}`);
   fs.rmSync(d, { recursive: true, force: true });
-  check(kit(fresh(), 'install', '--rigor', 'heroic', '--app', 'x=go:x').status === 2, 'install should refuse an unknown rigor');
+  const heroic = fresh();
+  check(kit(heroic, 'install', '--rigor', 'heroic', '--app', 'x=go:x').status === 2, 'install should refuse an unknown rigor');
+  fs.rmSync(heroic, { recursive: true, force: true });
 }
 
 // The daily loop: new, start, set, next, board, with STATUS.md and the log kept current.

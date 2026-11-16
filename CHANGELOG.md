@@ -40,6 +40,17 @@ All notable changes to project-kit are documented here. The format follows
 - The manual install steps match what `install` writes (deny rules only, the full ignore list, `.gitattributes`,
   the glossary).
 - Tests no longer touch `~/.claude/project-kit`, and resolve their own folder correctly on Windows.
+- e2e templates: signed-in screens were skipped on the first visual or capture run, because the skip looked for the
+  saved session file before the setup project had written it; it now looks at the credentials.
+- plugin-build templates: the example hook treats `.ENV` like `.env` (one file on macOS and Windows), and the hook
+  test no longer prints a stack trace for a hook that exits without reading its input.
+- `css-inventory.mjs`: Sass and Less variables are counted; a `;` in a data URL or a quoted string no longer cuts a
+  declaration short; `url(#id)` and quoted text are not colors; nested functions (`hsl(var(--h) …)`) stay whole;
+  inline styles in single quotes and protocol-relative or unquoted CDN links are read; HTML comments are skipped;
+  a bad `@import` URL or a dangling link no longer crashes it.
+- `ui_compare.py` no longer crashes on a capture far wider than the reference.
+- The weekly pin check failed open: it passed when npm could not be reached, and never flagged a 0.x pin once the
+  package reached 1.x. CI no longer installs awk variants that no test used.
 
 ## [1.5.1] - 2026-11-16
 ### Fixed

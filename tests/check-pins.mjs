@@ -20,16 +20,16 @@ for (const f of files) {
     if (!pins.has(m[1])) pins.set(m[1], { range: m[2], where: path.relative(root, f) });
   }
 }
-const cc = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8').match(/CLAUDE_CODE_VERSION:\s*"?([\d.]+)/);
-if (cc) pins.set('@anthropic-ai/claude-code', { range: cc[1], where: '.github/workflows/ci.yml' });
-
-const key = v => { const [a, b] = v.replace(/^[~^]/, '').split('.').map(Number); return a === 0 ? `0.${b || 0}` : String(a); };
-let stale = 0;
+const parts = v => v.replace(/^[~^]/, '').split('.').map(Number);
+let stale = 0, checked = 0, unreachable = 0;
 for (const [pkg, { range, where }] of pins) {
   let latest;
-  try { latest = execFileSync('npm', ['view', pkg, 'version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { continue; }
-  if (!latest) continue;
-  let behind = key(range) !== key(latest) && Number(key(latest).replace('0.', '')) >= Number(key(range).replace('0.', ''));
+  try { latest = execFileSync('npm', ['view', pkg, 'version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { unreachable++; console.log(`unknown   ${pkg}@${range}  (${where})  npm view failed`); continue; }
+  if (!latest) { unreachable++; continue; }
+  checked++;
+  // Behind: a newer major, or, while both are 0.x, a newer minor.
+  const [rMajor, rMinor = 0] = parts(range), [lMajor, lMinor = 0] = parts(latest);
+  let behind = lMajor > rMajor || (rMajor === 0 && lMajor === 0 && lMinor > rMinor);
   // typescript stays on 6.x while typescript-eslint's peer range excludes 7; flag it once that range allows it.
   if (pkg === 'typescript' && behind) {
     try {
@@ -43,3 +43,5 @@ for (const [pkg, { range, where }] of pins) {
   if (note && pkg !== '@anthropic-ai/claude-code') stale++;
 }
 if (stale) { console.error(`${stale} pinned package(s) have a newer major version: update the rules and skills that name them.`); process.exit(1); }
+// A run that could not ask npm proves nothing; it must not pass.
+if (unreachable || !checked) { console.error(`${unreachable} package(s) could not be looked up (${checked} checked): is the npm registry reachable?`); process.exit(1); }

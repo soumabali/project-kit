@@ -8,13 +8,16 @@ HOOK="${HOOK:-$(cd "$(dirname "$0")/.." && pwd)/hooks/protect-env.sh}"
 failures=0
 event() { T="$1" P="$2" node -e 'process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:process.env.T,tool_input:{file_path:process.env.P,content:"x"}}))'; }
 expect() { # wanted exit, tool, path
-  event "$2" "$3" | "${HOOK_BASH:-bash}" "$HOOK" 2>/dev/null; local got=$?
+  local json got; json="$(event "$2" "$3")" # built first: a hook that exits without reading stdin must not break the pipe
+  printf '%s' "$json" | "${HOOK_BASH:-bash}" "$HOOK" 2>/dev/null; got=$?
   if [ "$got" != "$1" ]; then echo "    $2 $3 (${HOOK_BASH:-bash}): exit $got, wanted $1"; failures=$((failures + 1)); fi
 }
 cases() {
   expect 2 Write /repo/.env
   expect 2 Edit /repo/api/.env.production
   expect 2 Write 'C:\repo\.env'
+  expect 2 Write /repo/.ENV
+  expect 2 Edit /repo/.Env.local
   expect 0 Write /repo/.env.example
   expect 0 Edit /repo/src/env.ts
   expect 0 Write /repo/README.md
