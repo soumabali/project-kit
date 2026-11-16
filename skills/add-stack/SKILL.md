@@ -24,6 +24,7 @@ Then confirm each `(verify)` command. An app that's gone or was misdetected:
    in the header. Skip generic advice the core rules already cover.
 4. If kickoff registered the app under a stand-in stack, remove it with
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" remove-app <name>`. Add the app to the Profile tables in CLAUDE.md
-   with its confirmed commands.
+   with its confirmed commands; tasks can then name it with `--app <name>`, since `new task` accepts the apps of
+   the manifest and those listed in the Profile's app table.
 5. Suggest contributing the file back to the plugin's `project-layer/rules/stacks/` (add a `kit:` metadata line
    and `{{APP}}` path placeholders) so the next project gets it.

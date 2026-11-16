@@ -4,7 +4,7 @@ paths:
   - "{{APP}}/package.json"
   - "{{APP}}/{app.json,app.config.ts,app.config.js,eas.json,metro.config.js,babel.config.js}"
   - "{{APP}}/.maestro/**/*"
-kit: {"name": "React Native (Expo)", "commands": {"setup": "npm ci", "dev": "npx expo start", "test": "npx jest", "testOne": "npx jest -t \"<name>\"", "lint": "npx expo lint", "types": "npx tsc --noEmit", "build": "npx eas build --profile preview --platform all", "audit": "npm audit --audit-level high"}, "check": {"ext": "ts,tsx,js,jsx", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
+kit: {"name": "React Native (Expo)", "commands": {"setup": "npm ci", "dev": "npx expo start", "test": "npx jest", "testOne": "npx jest -t \"<name>\"", "lint": "npx expo lint", "types": "npx tsc --noEmit", "build": "npx eas-cli build --profile preview --platform all", "audit": "npm audit --audit-level high"}, "check": {"ext": "ts,tsx,js,jsx", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
 ---
 
 # Stack: React Native (Expo)

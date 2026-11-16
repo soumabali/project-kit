@@ -1,8 +1,9 @@
 // Checks front matter of skills, agents, rules, and templates without third-party YAML parsers.
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // a file URL's pathname is not a path on Windows
 let failures = 0;
 const fail = (file, msg) => { failures++; console.error(`    ${path.relative(root, file)}: ${msg}`); };
 

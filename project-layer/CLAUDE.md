@@ -30,7 +30,8 @@ record the exception in the task file.
   if it didn't, read STATUS.md. Then read only the active task file and the files it lists.
 - Dirty tree, or a branch that doesn't match the active task: report it and ask (in `auto`: park it, §11).
 - Task bookkeeping (ids, new task files, status changes, STATUS.md lines, log.md) goes through the
-  `project-kit:task` skill and its commands, never by hand; they keep ids global and the files consistent.
+  `project-kit:task` skill and its commands, never by hand; they keep ids global and the files consistent. A log
+  line that belongs to no status change (quick lane, release, gate result): `kit.mjs log "<text>"`.
 - Stopping with work unfinished: write the next step in the task file and STATUS.md, commit `wip(<id>): <state>`.
 
 ### 2. Rigor and lanes
@@ -40,7 +41,7 @@ task's acceptance criteria apply at every level.
 | | prototype | standard (default) | production |
 |---|---|---|---|
 | Tests | unit tests for logic, one E2E smoke per critical journey | test first; integration on a real database; E2E per critical journey | standard plus the coverage floor (80% of domain logic), visual baselines, k6 before releases |
-| Review | `security_sensitive` work only | `project-kit:code-reviewer` per task | standard plus `test-reviewer` when E2E or integration tests change, reviewers on opus |
+| Review | `security_sensitive` work only | `project-kit:code-reviewer` per task | standard plus `test-reviewer` when E2E or integration tests change, reviewers on opus (pass `model: opus` when delegating) |
 | UI | DESIGN.md direction and the design-quality rule | plus `/project-kit:ui-verify` on new screens | plus visual baselines and axe in CI |
 | Docs | task Result and log line | plus API spec and data model kept current | plus runbook and ADR for every new pattern |
 

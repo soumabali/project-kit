@@ -3,11 +3,15 @@
 // lint check of just that file, a few seconds at most) so a mistake surfaces at once instead of at the end of the
 // task. The check comes from the app's stack (the kit: line of its rule) or from `checks` in the manifest, which
 // `kit.mjs check` sets. A missing tool, a timeout, or a file the check doesn't cover is skipped silently.
+// A command from the manifest runs only once it is approved on this machine (scripts/lib/trust.mjs); until then
+// Claude is told once per session that it was skipped.
 // Exit 2 shows the failure to Claude; the edit has already happened.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { readStdin, findProject, stackMeta } from '../lib/project.mjs';
+import os from 'node:os';
+import { readStdin, findProject, stackMeta, PLUGIN_ROOT } from '../lib/project.mjs';
+import { isTrusted } from '../lib/trust.mjs';
 
 let event;
 try { event = JSON.parse(readStdin() || '{}'); } catch { process.exit(0); }
@@ -27,7 +31,21 @@ if (!app) process.exit(0);
 const override = project.manifest.checks && project.manifest.checks[app.name];
 let check = null;
 if (override === '' || override === false) process.exit(0);
-if (override && typeof override === 'object') check = override;
+if (override && typeof override === 'object') {
+  if (typeof override.cmd !== 'string') process.exit(0);
+  if (!isTrusted(project.root, app.name, override)) {
+    const id = String(event.session_id || '').replace(/[^A-Za-z0-9_-]/g, '_');
+    const dir = path.join(process.env.CLAUDE_PLUGIN_DATA || path.join(os.tmpdir(), 'project-kit'), 'sessions');
+    const mark = path.join(dir, `${id}.unapproved-${app.name}`);
+    if (!id || !fs.existsSync(mark)) {
+      if (id) { try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(mark, ''); } catch { /* best effort */ } }
+      process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext:
+        `[project-kit] The quick check for app "${app.name}" is a command from .claude/project-kit.json that hasn't been approved on this machine, so it did not run: \`${override.cmd}\`. Show the command to the user once; if they approve it, run: node "${path.join(PLUGIN_ROOT, 'scripts', 'kit.mjs')}" check ${app.name} --trust. Don't approve it on your own.` } }));
+    }
+    process.exit(0);
+  }
+  check = override;
+}
 else for (const s of app.stacks || []) { const c = stackMeta(s).check; if (c) { check = c; break; } }
 if (!check || typeof check.cmd !== 'string') process.exit(0);
 
@@ -48,6 +66,7 @@ const cmd = check.cmd.split('{file}').join(fileArg);
 const r = spawnSync(cmd, { cwd: appDir, shell: true, encoding: 'utf8', timeout: 20000, maxBuffer: 1 << 20 });
 if (r.error || r.signal || r.status === 0 || r.status === 127) process.exit(0);
 const out = `${r.stdout || ''}${r.stderr || ''}`.trim();
-if (/not recognized as an internal or external command|command not found/i.test(out)) process.exit(0);
+// The tool is missing, or (ESLint) installed without a config: nothing to check with, which isn't the file's fault.
+if (/not recognized as an internal or external command|command not found|couldn't find an eslint\.config|could not find config file/i.test(out)) process.exit(0);
 process.stderr.write(`project-kit quick check failed for ${rel} (\`${cmd}\` in ${app.path}):\n${out.slice(-3000)}\nFix it now, before moving on.\n`);
 process.exit(2);

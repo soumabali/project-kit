@@ -5,6 +5,53 @@ All notable changes to project-kit are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-16
+### Security
+- Quick check commands from the manifest need approval on each machine. A command in `checks` of
+  `.claude/project-kit.json` travels with the repo, and the hook ran it after every edit without asking. It now runs
+  only where it was set (`kit.mjs check <app> --cmd …`) or approved (`kit.mjs check <app> --trust`); until then the
+  hook skips it and tells Claude once per session, and `check` and `doctor` show it as not approved. Built-in checks
+  of the stacks are unaffected. After updating, approve your existing custom checks once with `--trust`.
+- Secret guard, built-in patterns: JSON Web Tokens, and named values in lower case or in YAML and JSON
+  (`password: "…"`, `"apiKey": "…"`). Named values count only when they mix letters and digits, which ends the false
+  blocks on header names, dotted paths, and numbers (`API_KEY_HEADER=X-Acme-Api-Key-Header`).
+
+### Added
+- `kit.mjs log "<text>"` adds a line to `05-progress/log.md` for what no status change records (a quick-lane fix, a
+  release, a gate result); CLAUDE.md, the task, release, and security-gate skills name it.
+- `kit.mjs new task --app` accepts an app that only the Profile's app table lists, so an app on a stack added with
+  `/project-kit:add-stack` can have tasks.
+- CI runs the guard, quick check, and `kit.mjs` suites on Windows.
+- Rule paths: Twig, Haml, Slim, Jinja, and Go templates and ARB files load the UI rules; Symfony `Entity/` and
+  `Repository/`, singular `model/`, and NestJS `*.entity.ts` load the database rule; NestJS controllers and
+  resolvers load the API rule; Jenkins, CircleCI, Azure, and Bitbucket pipelines load the infra rule.
+- .NET stack: a raw-SQL rule, as every other backend stack has.
+
+### Fixed
+- Rust quick check: `cargo fmt --check`, which reads the crate's edition; the old command forced the 2024 style and
+  failed correctly formatted files of older editions.
+- Python quick check honours the project's ruff excludes (`--force-exclude`).
+- React Native build command: `npx eas-cli build` (`npx eas` runs an unrelated package).
+- The quick check is skipped when ESLint is installed without a config, instead of failing after every edit.
+- The API rule no longer loads for front-end file routes (`src/routes/index.tsx`).
+- The rigor table is the single source for what each level needs: the testing and UI rules, the phase template, the
+  e2e, ui-verify, and kickoff skills, and the Phase 00 checklist no longer ask for the coverage floor, visual
+  baselines, or the test reviewer below production; the README's Phase 00 row matches the checklist.
+- The manual install steps match what `install` writes (deny rules only, the full ignore list, `.gitattributes`,
+  the glossary).
+- Tests no longer touch `~/.claude/project-kit`, and resolve their own folder correctly on Windows.
+- e2e templates: signed-in screens were skipped on the first visual or capture run, because the skip looked for the
+  saved session file before the setup project had written it; it now looks at the credentials.
+- plugin-build templates: the example hook treats `.ENV` like `.env` (one file on macOS and Windows), and the hook
+  test no longer prints a stack trace for a hook that exits without reading its input.
+- `css-inventory.mjs`: Sass and Less variables are counted; a `;` in a data URL or a quoted string no longer cuts a
+  declaration short; `url(#id)` and quoted text are not colors; nested functions (`hsl(var(--h) …)`) stay whole;
+  inline styles in single quotes and protocol-relative or unquoted CDN links are read; HTML comments are skipped;
+  a bad `@import` URL or a dangling link no longer crashes it.
+- `ui_compare.py` no longer crashes on a capture far wider than the reference.
+- The weekly pin check failed open: it passed when npm could not be reached, and never flagged a 0.x pin once the
+  package reached 1.x. CI no longer installs awk variants that no test used.
+
 ## [1.5.1] - 2026-11-16
 ### Fixed
 - Quick check: the edited file's name now reaches the check command exactly as written. A name with `$` (a route

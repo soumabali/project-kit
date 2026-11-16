@@ -15,7 +15,9 @@ fi
 
 name="${file##*/}"
 name="${name##*\\}"
-case "$name" in
+# .ENV and .env are one file on macOS and Windows, so compare in lower case; a CR can trail the name on Windows.
+lower="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -d '\r')"
+case "$lower" in
   .env.example) exit 0 ;;
   .env|.env.*)
     echo "Blocked: $name holds real configuration. Put placeholders in .env.example and ask the user to set real values." >&2

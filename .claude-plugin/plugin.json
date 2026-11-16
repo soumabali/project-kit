@@ -1,6 +1,6 @@
 {
   "name": "project-kit",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Production-grade project workflow for any stack: resumable task tracking, test-first builds with real E2E tests, design-to-UI fidelity, security gates, and releases, including Claude Code skills, plugins, and MCP servers and clients. Works alongside superpowers, impeccable, ponytail, token-router, and stack plugins.",
   "author": {
     "name": "soumabali"

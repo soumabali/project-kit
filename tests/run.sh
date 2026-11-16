@@ -27,7 +27,8 @@ inventory_ok() {
     const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
     const has = (k, v) => r[k].some((x) => x.value === v);
     const idAsColor = r.colors.some((x) => /^#(CAFE|CCAAFFEE)$/i.test(x.value));
-    if (!(has("colors", "#1F4FD8") && has("breakpoints", "768px") && has("breakpoints", "1024px") && has("fontSizes", "16px") && !idAsColor && r.externalResources.some((x) => /no SRI/.test(x.value)))) { console.error(JSON.stringify(r)); process.exit(1); }'
+    const notColor = r.colors.some((x) => /^#(FFAADDEE|ABCDEF|FEDCBA)$/i.test(x.value));
+    if (!(has("colors", "#123456") && !notColor && has("colors", "#1F4FD8") && has("breakpoints", "768px") && has("breakpoints", "1024px") && has("fontSizes", "16px") && !idAsColor && r.externalResources.some((x) => /no SRI/.test(x.value)))) { console.error(JSON.stringify(r)); process.exit(1); }'
 }
 step "css-inventory.mjs on the fixture theme" inventory_ok
 

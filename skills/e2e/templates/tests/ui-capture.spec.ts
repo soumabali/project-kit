@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { test, expect } from './fixtures';
 import { breakpoints, onSignIn, screens } from '../screens';
 
@@ -9,7 +8,9 @@ test.skip(!process.env.UI_VERIFY, 'Set UI_VERIFY=1 to capture screens for /proje
 
 for (const screen of screens) {
   test.describe(`capture ${screen.id}`, () => {
-    test.skip(!!screen.auth && !fs.existsSync(`.auth/${screen.auth}.json`), `Needs a signed-in ${screen.auth}: set E2E_${(screen.auth ?? '').toUpperCase()}_EMAIL and _PASSWORD`);
+    // Decided by the credentials, not by the saved session file: this line runs before the setup project writes it.
+    const role = (screen.auth ?? '').toUpperCase();
+    test.skip(!!screen.auth && !(process.env[`E2E_${role}_EMAIL`] && process.env[`E2E_${role}_PASSWORD`]), `Needs a signed-in ${screen.auth}: set E2E_${role}_EMAIL and _PASSWORD`);
     test.use({ storageState: screen.auth ? `.auth/${screen.auth}.json` : { cookies: [], origins: [] } });
 
     const states: Record<string, (page: import('@playwright/test').Page) => Promise<void>> = {

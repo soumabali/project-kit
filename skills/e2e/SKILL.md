@@ -66,5 +66,6 @@ and of `/project-kit:plugin-build` (`claude plugin validate --strict`, hook test
 
 ## Done when
 Every critical journey has a green end-to-end test in CI, every protected endpoint has negative tests, designed
-screens have visual baselines and pass axe, new specs survive `--repeat-each=5`, and `project-kit:test-reviewer`
-(given the task file and diff range) judged the tests sufficient.
+screens pass axe, and new specs survive `--repeat-each=5`. At production rigor (CLAUDE.md §2), designed screens
+also have visual baselines and `project-kit:test-reviewer` (given the task file and diff range) judged the tests
+sufficient.

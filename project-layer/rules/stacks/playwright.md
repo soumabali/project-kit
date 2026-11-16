@@ -2,7 +2,7 @@
 paths:
   - "{{APP}}/**/*.{ts,js,mjs}"
   - "{{APP}}/package.json"
-kit: {"name": "Playwright end-to-end suite", "commands": {"setup": "npm ci && npx playwright install --with-deps", "dev": "npx playwright test --ui", "test": "npx playwright test", "testOne": "npx playwright test -g \"<name>\"", "lint": "npx eslint .", "types": "npx tsc --noEmit", "audit": "npm audit --audit-level=high"}, "check": {"ext": "ts,js", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
+kit: {"name": "Playwright end-to-end suite", "commands": {"setup": "npm ci && npx playwright install --with-deps", "dev": "npx playwright test --ui", "test": "npx playwright test", "testOne": "npx playwright test -g \"<name>\"", "lint": "npx eslint .", "types": "npx tsc --noEmit", "audit": "npm audit --audit-level=high"}, "check": {"ext": "ts,js,mjs", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
 ---
 
 # Stack: Playwright end-to-end suite

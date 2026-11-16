@@ -4,8 +4,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // a file URL's pathname is not a path on Windows
 const GUARD = path.join(root, 'scripts', 'hooks', 'pre-tool.mjs');
 const j = (...p) => p.join('');
 const r = (n, set = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') =>
@@ -40,6 +41,10 @@ const cases = [
   ['Azure AD client secret', 'block', j('abc1', 'Q~', r(34))],
   ['Laravel APP_KEY', 'block', j('APP_KEY=', 'base64:', r(44))],
   ['JWT secret in .env style', 'block', j('JWT_SECRET', '=', r(40))],
+  ['JSON Web Token', 'block', j('const t = "eyJ', r(34), '.eyJ', r(60), '.', r(43), '"')],
+  ['Password in YAML', 'block', j('db:\n  password: "', r(24), '"')],
+  ['API key in JSON', 'block', j('{ "apiKey": "', r(32), '" }')],
+  ['Lower-case token assignment', 'block', j("const access_token = '", r(40), "';")],
   ['Postgres URL with a password', 'block', j('DATABASE_URL=postgres://app:', 'S3cr3tP4ss', '@db.prod.internal:5432/app')],
   ['PEM built from an environment variable', 'allow', j('const pem = `-----BEGIN ', 'PRIVATE KEY-----\\n${process.env.KEY}`;')],
   ['PEM header check in code', 'allow', j("if (key.startsWith('-----BEGIN ", "PRIVATE KEY-----')) parse(key);")],
@@ -51,6 +56,12 @@ const cases = [
   ['Compose database URL', 'allow', j('DATABASE_URL=mysql://root:', 'secret123', '@db:3306/app')],
   ['Secret from the environment', 'allow', 'const secret = process.env.JWT_SECRET;\nJWT_SECRET=${JWT_SECRET}'],
   ['Empty example values', 'allow', 'APP_KEY=\nJWT_SECRET=\nDB_PASSWORD='],
+  ['Header name, not a key', 'allow', 'API_KEY_HEADER=X-Acme-Api-Key-Header'],
+  ['Dotted path, not a secret', 'allow', 'JWT_SECRET=process.env.SIGNING_SECRET_VALUE'],
+  ['A number, not a token', 'allow', 'CACHE_TOKEN_TTL_SECONDS=360000000000000000000'],
+  ['Password field label', 'allow', 'const labels = { password: "Enter-your-password-here-please" };'],
+  ['Token read from config', 'allow', 'const token = config.get("auth.token"); const password = "";'],
+  ['jwt.io sample token', 'allow', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'],
   ['Ordinary code', 'allow', 'export function add(a: number, b: number) { return a + b; }'],
 ];
 

@@ -87,8 +87,7 @@ Claude starts `task`, `prototype`, `design-intake`, `ui-verify`, `e2e`, `mcp-bui
 runs. `kickoff`, `sync`, `release`, `rigor`, and `autonomy` change the project's setup or ship it, so only you
 start them.
 
-Agents: `project-kit:code-reviewer` (every task's diff; sonnet, or opus at production rigor and for
-security-sensitive work), `project-kit:test-reviewer`, `project-kit:security-reviewer`, and `project-kit:ui-reviewer`
+Agents: `project-kit:code-reviewer` (every task's diff; sonnet, or opus at production rigor), `project-kit:test-reviewer`, `project-kit:security-reviewer`, and `project-kit:ui-reviewer`
 (fidelity and a design-quality critique, on opus). All four are read-only and review work they didn't write.
 
 ## Stacks
@@ -125,7 +124,7 @@ Not every project needs every gate. Kickoff asks, and `/project-kit:rigor` chang
 | For | demos, tender prototypes, spikes, internal tools | most client work | long-lived or regulated systems |
 | Tests | unit tests for logic, one E2E smoke per critical journey | test first, real-database integration, E2E per critical journey | plus coverage floor, visual baselines, k6 before releases |
 | Reviews | security-sensitive work only | code reviewer per task | plus test reviewer, reviewers on opus |
-| Phase 00 | apps, local env, secret scan, smoke test | plus CI, security baseline, reference slice | everything |
+| Phase 00 | apps, local env, secret scan and `.env.example`, one smoke journey, a small CI (lint, tests, secret scan), README | full CI, security baseline, reference slice, docs | plus every optional scanner you accept |
 
 Security rules apply at every level. Projects installed before 1.5.0 read as `production` until you change them.
 
@@ -133,7 +132,8 @@ Security rules apply at every level. Projects installed before 1.5.0 read as `pr
 `/project-kit:task` (and Claude, on its own) runs the bookkeeping through `kit.mjs`, so ids, task files, STATUS.md,
 and log.md stay consistent without Claude hand-editing them: `next` picks the next ready task (dependencies done,
 hotfixes first), `new task|hotfix|phase|adr` creates one from the template with a global id, `start <id>` branches
-and marks it in progress, `set <id> <status>` moves it (blocked needs a reason), `board` shows everything, and
+and marks it in progress, `set <id> <status>` moves it (blocked needs a reason), `board` shows everything, `log "<text>"` adds a log line
+that belongs to no status change, and
 `next --parallel` lists tasks that can run at once in separate worktrees.
 
 Features with UI go idea → PRD → clickable prototype (`/project-kit:prototype`) → phase contract → tasks, and a
@@ -144,8 +144,8 @@ carries evidence you can check without running anything (screenshots, recordings
 - **Quick check after every edit.** A PostToolUse hook runs the app's fast check on just the edited file (`php -l`,
   ESLint, `gofmt -e`, `ruff`, `dart analyze`, …) and shows Claude any failure at once. `kit.mjs check` lists them and
   sets your own (`--cmd "…{file}…" --ext php`, `--off`). A missing tool is skipped. A command you set is saved in
-  `.claude/project-kit.json` and runs for everyone who works in the repo, so review `checks` there as you would a
-  project hook when the repo isn't yours.
+  `.claude/project-kit.json`, so it travels with the repo; on every other machine it runs only after someone there
+  has read it and approved it with `kit.mjs check <app> --trust` (Claude says once per session when one is waiting).
 - **One contract.** Web and mobile apps use types or a client generated from `openapi.yaml`, so a mismatch fails
   the build instead of the user.
 - **Current docs.** Claude checks the installed version's docs (Context7 when installed) before using a library
@@ -218,7 +218,7 @@ marketplaces; turn it on under `/plugin` → Marketplaces.
 
 ## Project layer commands
 Skills call `scripts/kit.mjs` for you; run it directly with `node <plugin>/scripts/kit.mjs <command>`:
-`stacks`, `detect`, `install`, `add-app`, `remove-app`, `sync`, `new`, `start`, `set`, `next`, `board`, `rigor`,
+`stacks`, `detect`, `install`, `add-app`, `remove-app`, `sync`, `new`, `start`, `set`, `next`, `board`, `log`, `rigor`,
 `autonomy`, `check`, `starters`, `doctor`, `uninstall` (removes only what nobody has edited, and gives a merged
 CLAUDE.md its own content back), and `skip`. `--help` lists the options.
 Each command plans its changes and writes nothing if a check fails. It never overwrites a file it didn't write
@@ -229,8 +229,8 @@ Each command plans its changes and writes nothing if a check fails. It never ove
   and off setup modes), the secret guard (credential formats, placeholders, every write path), the git guard, the
   command guard per autonomy, the quick check, the installer (detect, install, sync and rule migration, the task
   loop, rigor, autonomy, checks, starters, add-app, remove-app, adopt, uninstall, doctor), helper scripts, DESIGN.md
-  lint, and `claude plugin validate --strict`. CI runs it on Linux and macOS and fails a release tag that still has
-  an unfilled placeholder owner.
+  lint, and `claude plugin validate --strict`. CI runs it on Linux and macOS, runs the Node suites (guards, quick check, `kit.mjs`) on Windows, and fails a
+  release tag that still has an unfilled placeholder owner.
 - The Maintenance workflow checks weekly that the versions the kit writes into projects are current
   (`node tests/check-pins.mjs`), and runs the skill trigger evals in `evals/` when started by hand.
 - Bump `version` in `.claude-plugin/plugin.json`, add a CHANGELOG entry, then `claude plugin tag --push`.

@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import { isCustomCheck, isTrusted, trust, untrust } from './lib/trust.mjs';
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LAYER = path.join(PLUGIN_ROOT, 'project-layer');
@@ -94,7 +95,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith('--')) { args._.push(a); continue; }
     const key = a.slice(2);
-    if (['dry-run', 'force', 'merge-claude-md', 'auto', 'json', 'help', 'security', 'ui', 'off', 'reset', 'parallel'].includes(key)) { args[key] = true; continue; }
+    if (['dry-run', 'force', 'merge-claude-md', 'auto', 'json', 'help', 'security', 'ui', 'off', 'reset', 'trust', 'parallel'].includes(key)) { args[key] = true; continue; }
     // A mistyped flag must not be skipped: `uninstall --dryrun` would otherwise really uninstall.
     if (!OPTIONS.includes(key)) fail(`unknown option --${key}; run with --help for the list`);
     const val = argv[++i];
@@ -979,7 +980,11 @@ function cmdNew(args) {
     id = `${prefix}-${String(nextNumber(root, prefix, ['04-tasks'])).padStart(3, '0')}`;
     const phase = kind === 'hotfix' ? 'hotfix' : args.phase || activePhase(root) || 'phase-01';
     if (!/^(phase-\d+|hotfix)$/.test(phase)) fail(`bad --phase "${phase}"; expected phase-01 or similar`);
-    const names = manifest.apps.map(a => a.name);
+    // Apps of the manifest, plus those the Profile's app table lists: an app on a stack the kit has no rules for
+    // (/project-kit:add-stack) lives only there.
+    const profile = extractBlock(textOf(path.join(root, 'CLAUDE.md')), MARK.profileBegin, MARK.profileEnd);
+    const listed = profile ? [...profile.block.matchAll(/^\| *([A-Za-z0-9][A-Za-z0-9_-]*) *\| *`[^`|]+` *\|/gm)].map(m => m[1]) : [];
+    const names = [...new Set([...manifest.apps.map(a => a.name), ...listed])];
     const app = (args.app[0] || (names.length === 1 ? names[0] : '')).trim();
     if (!app) fail(`give --app (one of: ${names.join(', ') || 'none; add apps first'})`);
     for (const a of app.split(',')) if (!names.includes(a.trim())) fail(`no app named "${a.trim()}" (apps: ${names.join(', ')})`);
@@ -1062,6 +1067,18 @@ function cmdSet(args) {
   console.log(`${args['dry-run'] ? 'Dry run: ' : ''}${id} ${t.status} → ${status}`);
 }
 
+// A line in 05-progress/log.md that belongs to no status change: a quick-lane fix, a release, a gate result.
+function cmdLog(args) {
+  const root = path.resolve(args['project-dir'] || '.');
+  loadManifest(root);
+  const text = args._.slice(1).join(' ').replace(/[\r\n]+/g, ' ').trim();
+  if (!text) fail('give the line to log, e.g. log "quick: fix typo in the pricing page"');
+  const w = makeWriter(root, args['dry-run']);
+  appendLog(root, w, `${stamp()} ${text}`);
+  w.commit();
+  console.log(`${args['dry-run'] ? 'Dry run: would log' : 'Logged'}: ${text}`);
+}
+
 function cmdNext(args) {
   const root = path.resolve(args['project-dir'] || '.');
   loadManifest(root);
@@ -1107,17 +1124,29 @@ function cmdCheck(args) {
   const checks = { ...(manifest.checks || {}) };
   const effective = a => (a.name in checks ? checks[a.name] : a.stacks.map(s => STACKS[s].kit.check).find(Boolean) || '');
   if (!name) {
-    for (const a of manifest.apps) { const c = effective(a); console.log(`  ${a.name.padEnd(14)} ${c ? `${c.cmd}${c.ext ? `  (.${c.ext.split(',').join(', .')})` : ''}` : 'off'}`); }
+    for (const a of manifest.apps) {
+      const c = effective(a);
+      const pending = isCustomCheck(checks[a.name]) && !isTrusted(root, a.name, checks[a.name]);
+      console.log(`  ${a.name.padEnd(14)} ${c ? `${c.cmd}${c.ext ? `  (.${c.ext.split(',').join(', .')})` : ''}` : 'off'}${pending ? `  — not approved on this machine, so it doesn't run; read it, then: check ${a.name} --trust` : ''}`);
+    }
     return;
   }
   if (!manifest.apps.some(a => a.name === name)) fail(`no app named "${name}"`);
+  // A command set here is approved here. One that came with the repo runs after --trust on each machine.
+  if (args.trust) {
+    if (!isCustomCheck(checks[name])) fail(`${name} uses its stack's built-in quick check (or none); there is nothing to approve`);
+    if (!args['dry-run']) trust(root, name, checks[name]);
+    console.log(`${name}: quick check \`${checks[name].cmd}\` approved on this machine`);
+    return;
+  }
   if (args.reset) delete checks[name];
   else if (args.off) checks[name] = '';
   else if (args.cmd) checks[name] = { cmd: args.cmd, ...(args.ext ? { ext: args.ext } : {}) };
-  else fail('give --cmd "…{file}…" [--ext php,inc], --off, or --reset');
+  else fail('give --cmd "…{file}…" [--ext php,inc], --off, --reset, or --trust');
   const w = makeWriter(root, args['dry-run']);
   w.write(MANIFEST, manifestText({ ...manifest, checks, updatedAt: today() }), null);
   w.commit();
+  if (!args['dry-run']) { if (isCustomCheck(checks[name])) trust(root, name, checks[name]); else untrust(root, name); }
   const c = effective({ ...manifest.apps.find(a => a.name === name), name });
   console.log(`${name}: quick check ${c ? `\`${c.cmd}\`` : 'off'}`);
 }
@@ -1276,6 +1305,8 @@ function cmdDoctor(args) {
   ok(`rigor: ${rigorOf(manifest)} · autonomy: ${autonomyOf(manifest)} (a session can override it with PROJECT_KIT_AUTONOMY or --dangerously-skip-permissions)`);
   const leftover = askRulesIn(root);
   if (leftover.length) warn(`${leftover.length} ask rule(s) in ${SETTINGS} prompt in every permission mode, also in unattended sessions: ${leftover.slice(0, 5).join(', ')}${leftover.length > 5 ? ', …' : ''}`);
+  const unapproved = manifest.apps.map(a => a.name).filter(n => isCustomCheck((manifest.checks || {})[n]) && !isTrusted(root, n, manifest.checks[n]));
+  if (unapproved.length) warn(`the quick check of ${unapproved.join(', ')} is a command from ${MANIFEST} not approved on this machine, so it doesn't run → read it (kit.mjs check), then kit.mjs check <app> --trust`);
   const uiApps = manifest.apps.filter(a => a.stacks.some(s => UI_STACKS.has(s)));
   const design = textOf(path.join(root, 'DESIGN.md'));
   if (uiApps.length && !design) warn('DESIGN.md missing; UI apps need a chosen design direction (/project-kit:design-intake)');
@@ -1359,7 +1390,9 @@ const HELP = `project-kit ${KIT_VERSION}
   node kit.mjs set <id> <status> [--reason "…"]   backlog todo in-progress blocked in-review done cancelled
   node kit.mjs next [--parallel] [--json]   the next ready task (dependencies done), or every ready one
   node kit.mjs board [--json]               tasks by status
-  node kit.mjs check <app> [--cmd "…{file}…" --ext php,inc | --off | --reset]   the quick check after each edit
+  node kit.mjs log "<text>"                 add a line to 05-progress/log.md (quick fixes, releases, gate results)
+  node kit.mjs check <app> [--cmd "…{file}…" --ext php,inc | --off | --reset | --trust]   the quick check after each edit;
+                   --trust approves, on this machine, a command that came with the repo
   node kit.mjs starters [set <stack> <git-url> | remove <stack>]   starter repositories kickoff clones for new apps
   node kit.mjs doctor
   node kit.mjs uninstall [--data-dir <plugin data dir>] [--dry-run]   remove what install created and nobody edited
@@ -1369,7 +1402,7 @@ Options: --project-dir <dir> (default: current directory)`;
 const COMMANDS = {
   stacks: cmdStacks, detect: cmdDetect, install: cmdInstall, 'add-app': cmdAddApp, 'remove-app': cmdRemoveApp,
   sync: cmdSync, autonomy: cmdAutonomy, rigor: cmdRigor, new: cmdNew, start: cmdStart, set: cmdSet,
-  next: cmdNext, board: cmdBoard, check: cmdCheck, starters: cmdStarters, doctor: cmdDoctor, uninstall: cmdUninstall, skip: cmdSkip,
+  next: cmdNext, board: cmdBoard, log: cmdLog, check: cmdCheck, starters: cmdStarters, doctor: cmdDoctor, uninstall: cmdUninstall, skip: cmdSkip,
 };
 const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];

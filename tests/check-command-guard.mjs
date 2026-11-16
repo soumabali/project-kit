@@ -4,14 +4,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // a file URL's pathname is not a path on Windows
 const PRE = path.join(root, 'scripts', 'hooks', 'pre-tool.mjs');
 const POST = path.join(root, 'scripts', 'hooks', 'post-tool.mjs');
 const SESSION = path.join(root, 'scripts', 'hooks', 'session-start.mjs');
 let failures = 0;
 const check = (cond, msg) => { if (!cond) { failures++; console.error(`    ${msg}`); } };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-guard-'));
+// Approvals of quick check commands live per machine; keep this run's in its own folder.
+process.env.PROJECT_KIT_HOME = path.join(tmp, 'home');
+const { trust } = await import('../scripts/lib/trust.mjs');
 const proj = path.join(tmp, 'proj');
 const plain = path.join(tmp, 'plain');
 fs.mkdirSync(path.join(proj, '.claude'), { recursive: true });
@@ -80,12 +84,18 @@ check(guard('git push --force', { cwd: plain }) === 'exit 2', 'the git guard sho
 // Quick check after an edit: a failing file reaches Claude (exit 2); a passing one, a skipped type, or a missing tool is silent.
 fs.mkdirSync(path.join(proj, 'api'), { recursive: true });
 fs.writeFileSync(path.join(proj, 'api', 'lint.mjs'), "import fs from 'node:fs';\nif (fs.readFileSync(process.argv[2], 'utf8').includes('BAD')) { console.error('lint: BAD found'); process.exit(1); }\n");
-manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: { cmd: 'node lint.mjs {file}', ext: 'txt' } } });
-const edit = (file, content) => {
+const lint = { cmd: 'node lint.mjs {file}', ext: 'txt' };
+manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: lint } });
+const edit = (file, content, session = '') => {
   fs.writeFileSync(path.join(proj, file), content);
-  return spawnSync(process.execPath, [POST], { input: JSON.stringify({ tool_name: 'Write', cwd: proj, tool_input: { file_path: path.join(proj, file) } }), encoding: 'utf8' });
+  return spawnSync(process.execPath, [POST], { input: JSON.stringify({ tool_name: 'Write', cwd: proj, session_id: session, tool_input: { file_path: path.join(proj, file) } }), encoding: 'utf8', env: { ...process.env, CLAUDE_PLUGIN_DATA: path.join(tmp, 'data') } });
 };
-let r = edit('api/a.txt', 'BAD line');
+// A command that came with the repo doesn't run until it is approved on this machine; Claude hears of it once a session.
+let r = edit('api/a.txt', 'BAD line', 'q1');
+check(r.status === 0 && /hasn't been approved on this machine/.test(r.stdout) && /check api --trust/.test(r.stdout), `an unapproved check should be skipped and reported: ${r.status} ${r.stdout}${r.stderr}`);
+check(edit('api/a.txt', 'BAD line', 'q1').stdout === '', 'the unapproved notice should come once per session');
+trust(proj, 'api', lint);
+r = edit('api/a.txt', 'BAD line');
 check(r.status === 2 && /lint: BAD found/.test(r.stderr), `a failing quick check should exit 2 with its output: ${r.status} ${r.stderr}`);
 check(edit('api/a.txt', 'fine').status === 0, 'a passing quick check should be silent');
 // The file name reaches the check as written: "$" (a route file such as $postId.tsx) and "$(…)" are not expanded.
@@ -98,7 +108,12 @@ if (process.platform !== 'win32') {
 }
 check(edit('api/a.md', 'BAD').status === 0, 'a file type the check does not cover should be skipped');
 check(edit('notes.txt', 'BAD').status === 0, 'a file outside every app should be skipped');
-manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: { cmd: 'definitely-not-a-tool {file}', ext: 'txt', requires: 'definitely-not-a-tool' } } });
+// Approval is for one command: a changed one is not run.
+manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: { cmd: 'node lint.mjs {file} --strict', ext: 'txt' } } });
+check(edit('api/a.txt', 'BAD').status === 0, 'a check changed after approval should not run');
+const missing = { cmd: 'definitely-not-a-tool {file}', ext: 'txt', requires: 'definitely-not-a-tool' };
+manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: missing } });
+trust(proj, 'api', missing);
 check(edit('api/a.txt', 'BAD').status === 0, 'a missing tool should be skipped');
 manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: '' } });
 check(edit('api/a.txt', 'BAD').status === 0, 'a check turned off should not run');

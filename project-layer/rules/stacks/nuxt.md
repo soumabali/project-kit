@@ -3,7 +3,7 @@ paths:
   - "{{APP}}/**/*.{vue,ts,js,mjs,cjs}"
   - "{{APP}}/nuxt.config.*"
   - "{{APP}}/package.json"
-kit: {"name": "Nuxt (Vue)", "commands": {"setup": "pnpm install", "dev": "pnpm dev", "test": "pnpm vitest run", "testOne": "pnpm vitest run -t \"<name>\"", "lint": "pnpm eslint .", "types": "pnpm nuxi typecheck", "build": "pnpm nuxi build", "audit": "pnpm audit --audit-level high"}, "check": {"ext": "ts,js,mjs,vue", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
+kit: {"name": "Nuxt (Vue)", "commands": {"setup": "pnpm install", "dev": "pnpm dev", "test": "pnpm vitest run", "testOne": "pnpm vitest run -t \"<name>\"", "lint": "pnpm eslint .", "types": "pnpm nuxi typecheck", "build": "pnpm nuxi build", "audit": "pnpm audit --audit-level high"}, "check": {"ext": "ts,js,mjs,cjs,vue", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
 ---
 
 # Stack: Nuxt (Vue 3)

@@ -36,7 +36,7 @@ def load(path):
 def compare(ref_path, act_path, out_path, threshold):
     ref, act = load(ref_path), load(act_path)
     if act.width != ref.width:
-        act = act.resize((ref.width, round(act.height * ref.width / act.width)), Image.LANCZOS)
+        act = act.resize((ref.width, max(1, round(act.height * ref.width / act.width))), Image.LANCZOS)
     height = max(ref.height, act.height)
     canvas_ref = Image.new("RGB", (ref.width, height), "white")
     canvas_ref.paste(ref, (0, 0))

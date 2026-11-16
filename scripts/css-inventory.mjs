@@ -27,7 +27,7 @@ function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name)) walk(path.join(dir, entry.name), out);
-    } else if (/\.(css|scss|less|html?)$/i.test(entry.name) && (INCLUDE_MIN || !/\.min\.css$/i.test(entry.name))) {
+    } else if (entry.isFile() && /\.(css|scss|less|html?)$/i.test(entry.name) && (INCLUDE_MIN || !/\.min\.css$/i.test(entry.name))) {
       out.push(path.join(dir, entry.name));
     }
   }
@@ -47,16 +47,23 @@ function normalizeHex(hex) {
   return `#${h}`;
 }
 
-// A declaration is "name: value" after "{" or ";" and before ";" or "}", so selectors (a:hover, #id) never count.
-const DECLARATION = /(?:^|[{;])\s*(-{0,2}[a-zA-Z][\w-]*)\s*:\s*([^;{}]+)(?=[;}])/g;
+// A declaration is "name: value" after "{", ";", or a nested rule's "}", and before ";" or "}", so selectors
+// (a:hover, #id) never count. The name may be a Sass ($brand) or Less (@brand) variable.
+const DECLARATION = /(?:^|[{};])\s*([$@]?-{0,2}[a-zA-Z][\w-]*)\s*:\s*([^;{}]+)(?=[;}])/g;
+// What a url(...) or a quoted string holds is not a color (url(#fade), content: "#fff").
+const withoutData = (value) => value.replace(/url\([^)]*\)/gi, '').replace(/"[^"]*"|'[^']*'/g, '');
 
 function scanCss(css) {
   css = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  const decls = [...css.matchAll(DECLARATION)].map((m) => [m[1].toLowerCase(), m[2].trim().replace(/\s*!important$/i, '')]);
+  // A data: URL holds ";", which would end the declaration early; its content is not needed below.
+  const body = css.replace(/url\(\s*(?:"[^"]*"|'[^']*'|[^)]*)\)/gi, 'url()')
+    .replace(/"[^"\n]*"|'[^'\n]*'/g, (q) => q.replace(/[;{}]/g, ' ')); // nor may a quoted ";" end one
+  const decls = [...body.matchAll(DECLARATION)].map((m) => [m[1].toLowerCase(), m[2].trim().replace(/\s*!important$/i, '')]);
   for (const [name, value] of decls) {
-    for (const m of value.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) if ([4, 5, 7, 9].includes(m[0].length)) bump(counters.colors, normalizeHex(m[0]));
-    for (const m of value.matchAll(/\b(?:rgba?|hsla?|oklch|oklab|lch|lab)\([^)]*\)/gi)) bump(counters.colors, m[0].replace(/\s+/g, ' ').toLowerCase());
-    if (name.startsWith('--')) bump(counters.customProperties, `${name}: ${value}`);
+    const plain = withoutData(value);
+    for (const m of plain.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) if ([4, 5, 7, 9].includes(m[0].length)) bump(counters.colors, normalizeHex(m[0]));
+    for (const m of plain.matchAll(/\b(?:rgba?|hsla?|oklch|oklab|lch|lab)\((?:[^()]|\([^()]*\))*\)/gi)) bump(counters.colors, m[0].replace(/\s+/g, ' ').toLowerCase());
+    if (/^(--|[$@])/.test(name)) bump(counters.customProperties, `${name}: ${value}`);
   }
   const decl = (prop) => decls.filter(([name]) => name === prop).map(([, value]) => value);
   decl('font-family').forEach((v) => bump(counters.fontFamilies, v.replace(/\s+/g, ' ')));
@@ -75,15 +82,20 @@ function scanCss(css) {
     const fam = m[1].match(/font-family\s*:\s*([^;]+)/i);
     bump(counters.fontFaces, fam ? fam[1].trim() : 'unnamed');
   }
-  for (const m of css.matchAll(/@import\s+(?:url\()?['"]?(https?:\/\/[^'")\s]+)/gi)) bump(counters.externalResources, new URL(m[1]).host);
+  for (const m of css.matchAll(/@import\s+(?:url\()?['"]?(https?:\/\/[^'")\s]+)/gi)) {
+    try { bump(counters.externalResources, new URL(m[1]).host); } catch { /* ignore bad URLs */ }
+  }
 }
 
 function scanHtml(html) {
+  html = html.replace(/<!--[\s\S]*?-->/g, '');
   for (const m of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) scanCss(m[1]);
-  for (const m of html.matchAll(/style\s*=\s*"([^"]*)"/gi)) scanCss(`x{${m[1]}}`);
-  for (const m of html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>/gi)) {
+  // The style attribute in either quote style, and not data-style.
+  for (const m of html.matchAll(/(?<![\w-])style\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) scanCss(`x{${m[1] ?? m[2]}}`);
+  // Quoted or bare, with a scheme or protocol-relative (//cdn.example.com/a.css).
+  for (const m of html.matchAll(/<(?:script|link)\b[^>]*?(?:src|href)\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)[^>]*>/gi)) {
     const sri = /\bintegrity\s*=/.test(m[0]) ? 'with SRI' : 'no SRI';
-    try { bump(counters.externalResources, `${new URL(m[1]).host} (${sri})`); } catch { /* ignore bad URLs */ }
+    try { bump(counters.externalResources, `${new URL(m[1], 'https://x').host} (${sri})`); } catch { /* ignore bad URLs */ }
   }
 }
 

@@ -44,5 +44,6 @@ Fill the task's Security section **Gate result**: date, scope, tools run with re
 and status. Any open high or critical finding: set the task `blocked` and tell the user. Otherwise move the task
 to `in-review` for the user's approval.
 Before a release there is no task: write the same block to the release record `05-progress/releases/v<version>.md`
-(the release skill creates it) and one summary line to `05-progress/log.md`. Any open high or critical finding
+(the release skill creates it) and one summary line to `05-progress/log.md`
+(`node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" log "security gate v<version>: …"`). Any open high or critical finding
 stops the release.

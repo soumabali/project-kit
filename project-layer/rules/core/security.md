@@ -1,6 +1,6 @@
 ---
 paths:
-  - "{{APP}}/**/*.{php,rb,py,go,java,kt,kts,scala,cs,fs,ts,tsx,mts,cts,js,jsx,mjs,cjs,vue,svelte,astro,dart,rs,swift,ex,exs,heex,html,erb,jbuilder,haml,slim,twig,tmpl,gohtml,cshtml,razor,sql,sh}"
+  - "{{APP}}/**/*.{php,rb,py,go,java,kt,kts,scala,cs,fs,ts,tsx,mts,cts,js,jsx,mjs,cjs,vue,svelte,astro,dart,rs,swift,ex,exs,heex,html,erb,jbuilder,rake,ru,haml,slim,twig,jinja,j2,tmpl,gohtml,cshtml,razor,sql,sh}"
   - "{{APP}}/**/*.{yml,yaml,toml,xml,gradle,properties}"
 ---
 
