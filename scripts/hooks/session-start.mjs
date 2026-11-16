@@ -45,7 +45,7 @@ function printContext(root) {
   const status = path.join(root, '05-progress', 'STATUS.md');
   if (fs.existsSync(status)) {
     say('[05-progress/STATUS.md]');
-    say(fs.readFileSync(status).subarray(0, 6000).toString('utf8'));
+    say(fs.readFileSync(status, 'utf8').slice(0, 6000));
   } else say('This project uses project-kit but has no 05-progress/STATUS.md yet.');
   const st = git(root, 'status', '--short', '--branch');
   if (st !== null) {

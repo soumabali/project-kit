@@ -31,6 +31,7 @@ const PATTERNS = [
   /[a-zA-Z0-9_~.]{3}[0-9]Q~[a-zA-Z0-9_~.-]{31,34}/g,
   /cio[0-9A-Za-z]{32}/g, // crates.io API token
   /APP_KEY=base64:[A-Za-z0-9+/]{40,}/g,
+  /aws_?secret_?(access_?)?key["']?\s*[:=]\s*["']?[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])/gi, // in any case, as in ~/.aws/credentials
   /(^|[^A-Za-z0-9_])[A-Z0-9_]*(SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=["']?[A-Za-z0-9+/_.=-]{20,}/g,
   /[a-z][a-z0-9+.-]*:\/\/[^/:@ "'`]+:[^/@ "'`$]{6,}@[^ "'`/:]+/g,
 ];

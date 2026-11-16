@@ -4,6 +4,24 @@ All notable changes to project-kit are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- Quick check: the edited file's name now reaches the check command exactly as written. A name with `$` (a route
+  file such as `$postId.tsx`) was expanded by the shell, so the check ran on the wrong path and reported a failure
+  that wasn't there, and a name holding `$(…)` ran as a command.
+- `kit.mjs new`: a title containing `$1`, `$&`, or similar no longer corrupts the heading of the new task, phase, or
+  ADR file.
+- Task ids past 999: `task-1000` and later are listed, started, and sorted after `task-999`; before, the file was
+  created and then ignored by `next`, `board`, `start`, and `set`.
+- Git guard: `git commit -uno` and `git commit -S<key id>` are no longer mistaken for `-n`; the newer
+  `git config unset core.hooksPath` is blocked like `--unset`.
+- Command guard: destructive commands are recognised behind `sudo`, `env`, `time`, `xargs`, and similar wrappers,
+  with git's global options (`git -C api reset --hard`), and with `rm`'s flags in any spelling (`rm -rfv`,
+  `rm -f -r`, `rm --recursive --force`).
+- Secret guard: the built-in patterns catch an AWS secret access key written in lower case, as in
+  `~/.aws/credentials`.
+- Maintenance workflow: the evals job installs the Claude Code version pinned in `ci.yml`; its lookup matched
+  nothing, so it installed the latest release instead.
+- Session hook: STATUS.md is cut at a character, not in the middle of one.
 
 ## [1.5.0] - 2026-11-16
 ### Added

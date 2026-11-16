@@ -143,7 +143,9 @@ carries evidence you can check without running anything (screenshots, recordings
 ## Fewer bugs, better results
 - **Quick check after every edit.** A PostToolUse hook runs the app's fast check on just the edited file (`php -l`,
   ESLint, `gofmt -e`, `ruff`, `dart analyze`, …) and shows Claude any failure at once. `kit.mjs check` lists them and
-  sets your own (`--cmd "…{file}…" --ext php`, `--off`). A missing tool is skipped.
+  sets your own (`--cmd "…{file}…" --ext php`, `--off`). A missing tool is skipped. A command you set is saved in
+  `.claude/project-kit.json` and runs for everyone who works in the repo, so review `checks` there as you would a
+  project hook when the repo isn't yours.
 - **One contract.** Web and mobile apps use types or a client generated from `openapi.yaml`, so a mismatch fails
   the build instead of the user.
 - **Current docs.** Claude checks the installed version's docs (Context7 when installed) before using a library
