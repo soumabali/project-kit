@@ -1,0 +1,44 @@
+name: Maintenance
+# Weekly: are the versions the kit writes into projects still current? Fails (and emails the owner) when a pinned
+# package has a newer major. Evals: started by hand, since they use the repository's API key and cost tokens.
+on:
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      evals:
+        description: Run the skill trigger evals too
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: node tests/check-pins.mjs
+
+  evals:
+    if: github.event_name == 'workflow_dispatch' && inputs.evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: npm install -g "@anthropic-ai/claude-code@$(grep -oE 'CLAUDE_CODE_VERSION:[[:space:]]*"?[0-9.]+' .github/workflows/ci.yml | grep -oE '[0-9.]+$')"
+      - run: claude plugin eval .
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

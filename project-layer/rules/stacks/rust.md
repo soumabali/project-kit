@@ -5,7 +5,7 @@ paths:
   - "{{APP}}/Cargo.lock"
   - "{{APP}}/{rust-toolchain,rust-toolchain.toml,clippy.toml,rustfmt.toml,deny.toml}"
   - "{{APP}}/.cargo/config.toml"
-kit: {"name": "Rust", "commands": {"setup": "cargo fetch --locked", "dev": "cargo run", "test": "cargo test --locked --all-features", "testOne": "cargo test --locked <test_name>", "lint": "cargo fmt --all --check && cargo clippy --locked --all-targets --all-features -- -D warnings", "types": "cargo check --locked --all-targets --all-features", "build": "cargo build --locked --release", "audit": "cargo audit"}}
+kit: {"name": "Rust", "commands": {"setup": "cargo fetch --locked", "dev": "cargo run", "test": "cargo test --locked --all-features", "testOne": "cargo test --locked <test_name>", "lint": "cargo fmt --all --check && cargo clippy --locked --all-targets --all-features -- -D warnings", "types": "cargo check --locked --all-targets --all-features", "build": "cargo build --locked --release", "audit": "cargo audit"}, "check": {"ext": "rs", "cmd": "rustfmt --check --edition 2024 {file}", "requires": "rustfmt"}}
 ---
 
 # Stack: Rust

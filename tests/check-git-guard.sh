@@ -3,10 +3,9 @@
 # continuations, abbreviations, environment variables, config overrides, nested and chained commands), and lets
 # ordinary git commands and commit messages that only mention those flags through.
 set -u
-GUARD="$(cd "$(dirname "$0")/.." && pwd)/scripts/git-guard.sh"
+GUARD="$(cd "$(dirname "$0")/.." && pwd)/scripts/hooks/pre-tool.mjs"
 failures=0
-SHIMS="$(mktemp -d)"; trap 'rm -rf "$SHIMS"' EXIT
-run() { C="$1" node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.env.C}}))' | bash "$GUARD" 2>/dev/null; }
+run() { C="$1" node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.env.C}}))' | node "$GUARD" 2>/dev/null; }
 expect() { # wanted exit (2 block, 0 allow), command
   run "$2"; local got=$?
   if [ "$got" != "$1" ]; then printf '    exit %s, wanted %s: %s\n' "$got" "$1" "$2"; failures=$((failures + 1)); fi
@@ -68,32 +67,8 @@ cases() {
   expect 0 'echo "git push -f"'
   expect 0 'npm test'
 
-  # Without jq or python3 (Git Bash on Windows) the guard still reads the command.
-  FAKE="$SHIMS/noparser"; mkdir -p "$FAKE"
-  printf '#!/bin/sh\nexit 1\n' > "$FAKE/jq"; cp "$FAKE/jq" "$FAKE/python3"; chmod +x "$FAKE/jq" "$FAKE/python3"
-  PATH="$FAKE:$PATH" expect 2 'git -C api push -f origin main'
-  PATH="$FAKE:$PATH" expect 2 'git status && git commit -n -m "wip"'
-  PATH="$FAKE:$PATH" expect 0 'git commit -m "explain the -n flag"'
-  PATH="$FAKE:$PATH" expect 0 "$HEREDOC_MSG"
 }
 
-# The tokenizer must behave the same in every awk: mawk (Debian, Ubuntu), gawk (Git for Windows), the BSD awk on
-# macOS (original-awk on Linux), and busybox. Each available one runs every case; CI installs the Linux ones.
-seen=" "
-for impl in awk mawk gawk original-awk nawk busybox; do
-  bin="$(command -v "$impl" 2>/dev/null)" || continue
-  real="$(readlink -f "$bin" 2>/dev/null || echo "$bin")"
-  case "$seen" in *" $real "*) continue ;; esac
-  seen="$seen$real "
-  dir="$SHIMS/$impl"; mkdir -p "$dir"
-  if [ "$impl" = busybox ]; then printf '#!/bin/sh\nexec "%s" awk "$@"\n' "$bin" > "$dir/awk"
-  else printf '#!/bin/sh\nexec "%s" "$@"\n' "$bin" > "$dir/awk"; fi
-  chmod +x "$dir/awk"
-  before=$failures
-  PATH="$dir:$PATH" cases
-  [ "$failures" -eq "$before" ] || echo "    (the failures above ran with $impl: $real)"
-  checked="${checked:-}${checked:+, }$impl"
-done
-[ -n "${checked:-}" ] || { echo "    no awk found"; exit 1; }
+cases
 
 [ "$failures" -eq 0 ] || { echo "  $failures git guard check(s) failed"; exit 1; }

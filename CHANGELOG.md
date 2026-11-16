@@ -5,6 +5,50 @@ All notable changes to project-kit are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-16
+### Added
+- Rigor levels: `prototype`, `standard` (default for new installs), and `production` set the tests, reviews, UI
+  checks, docs, and Phase 00 groups a project needs; security rules apply at every level. Kickoff asks;
+  `/project-kit:rigor` (`kit.mjs rigor`) changes it. Projects installed before 1.5.0 read as production.
+- Daily loop commands: `kit.mjs new task|hotfix|phase|adr`, `start`, `set`, `next [--parallel]`, and `board` keep
+  global ids (across branches), task files, the phase table, STATUS.md lines, and log.md consistent. The new
+  `/project-kit:task` skill runs them, including parallel tasks in separate worktrees.
+- Command guard hook: asks before destructive and secret-printing commands in guarded autonomy; in auto, lets the
+  first run and denies the second. Autonomy is now per session: `PROJECT_KIT_AUTONOMY`, then
+  `--dangerously-skip-permissions` (counts as auto), then the project default.
+- Quick check after every edit (PostToolUse hook): the app's fast syntax or lint check on just that file, with
+  defaults per stack and `kit.mjs check` to change them.
+- `/project-kit:prototype`: a clickable HTML prototype of a feature's flows, reviewed before any code. Phases start
+  with a thin end-to-end slice, and task Results carry evidence (screenshots, recordings, command output).
+- Design quality: a design-quality core rule (the generated look to avoid, what to aim for, realistic content),
+  screen patterns for common screen types, three rendered directions to pick from when no design exists, one
+  component base per UI app, and a design-quality critique in `/project-kit:ui-verify`. DESIGN.md starts as an
+  `UNCHOSEN` placeholder that blocks UI work, and doctor warns about it.
+- Vite single-page app (React, Vue, Svelte) and React Native (Expo) stacks, with detection.
+- `06-technical-docs/glossary.md` for the client's terms; Phase 00 reference slice and `patterns.md`; generated API
+  clients from the OpenAPI spec; Context7 companion for current library docs; `lessons.md` line per hotfix.
+- Starter repositories per stack (`kit.mjs starters set <stack> <git-url>`), cloned by Phase 00 instead of the
+  framework generator.
+- The session hook prints rigor and autonomy, and suggests sync when the project is on an older kit version. A
+  prompt hook tells Claude when the session's autonomy differs from what it was told (SessionStart input doesn't
+  always carry the permission mode, and Shift+Tab can change it mid-session).
+- Kit maintenance: trigger evals for the skills Claude starts on its own (`evals/`), a weekly check of pinned
+  versions (`tests/check-pins.mjs`), and a Maintenance workflow that runs both.
+
+### Fixed
+- Windows: the session hook compares project paths without regard to case and normalizes them as `kit.mjs skip`
+  does, so the skip list and the repository-root check hold when a drive letter's case differs.
+
+### Changed
+- Hooks are Node.js scripts (secret guard, git guard, session start), so they run on Windows without Git Bash. The
+  git guard's shell reader is a direct port with the same test cases.
+- The kit no longer writes ask rules to `.claude/settings.json` (they prompt in every permission mode); sync takes
+  out the ask rules and 1.4.0 auto-mode deny rules it had added. `kit.mjs autonomy` only sets the project default.
+- `doctor`, `add-stack`, and `plugin-build` can be started by Claude, not only by the user.
+- CLAUDE.md core block is shorter (about 150 lines); companion details moved into the task skill.
+- `code-reviewer` runs on sonnet (opus at production rigor and for security-sensitive work); `ui-reviewer` runs
+  on opus and critiques design quality.
+
 ## [1.4.0] - 2026-11-15
 ### Added
 - Autonomy modes for a project. `guarded` (the default) is the behavior so far. `auto` is for unattended

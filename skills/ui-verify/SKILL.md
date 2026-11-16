@@ -20,7 +20,11 @@ Scope: the screens in `$ARGUMENTS`, or every screen the current task builds or c
 
 ## 2. Review
 Delegate to the `project-kit:ui-reviewer` agent with: the screen ids, reference paths, capture paths, comparison
-sheets, the screen's row in screens.md, and DESIGN.md. It returns differences by severity (blocker, major, minor).
+sheets, the screen's row in screens.md, DESIGN.md, and the design-quality rule
+(`.claude/rules/kit/design-quality.md`). It returns fidelity differences by severity (blocker, major, minor) and a
+quality critique: the design-quality "Avoid" items it sees and what a senior designer would change. Without a
+reference image, the critique against DESIGN.md, the chosen direction, and
+`${CLAUDE_PLUGIN_ROOT}/skills/design-intake/patterns.md` is the review.
 The reviewer didn't write the UI, which is the point; don't review your own screenshots instead.
 
 ## 3. Automated checks
@@ -30,7 +34,7 @@ The reviewer didn't write the UI, which is the point; don't review your own scre
 - Tokens: search the changed UI files for raw hex, rgb, or pixel values that should be tokens.
 
 ## 4. Fix and repeat
-Fix blockers and majors, recapture, and review again, at most three rounds. Anything the reference doesn't
+Fix blockers and majors from both the fidelity review and the critique, recapture, and review again, at most three rounds. Anything the reference doesn't
 specify, or a difference you believe is intentional, goes to the user as a question rather than a silent choice.
 
 ## 5. Lock it in

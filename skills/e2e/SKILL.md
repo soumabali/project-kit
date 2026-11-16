@@ -20,7 +20,7 @@ and real dependencies. Starter files live in `${CLAUDE_PLUGIN_ROOT}/skills/e2e/t
    `package.json`, `tsconfig.json`, `eslint.config.mjs`, `screens.ts`, and `tests/`. If it isn't in the Profile yet,
    register it: `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" add-app --app e2e=playwright:07-application/e2e`.
 2. Install from the e2e folder:
-   `npm i -D @playwright/test@latest @axe-core/playwright typescript@~6.0 typescript-eslint eslint @types/node@24`, then
+   `npm i -D @playwright/test@latest @axe-core/playwright typescript@~6.0 typescript-eslint eslint @types/node@<major>` (the Node major the project runs, from `.nvmrc` or `engines`), then
    `npx playwright install --with-deps`. (typescript-eslint doesn't support TypeScript 7 yet; keep `typescript` in
    its peer range.)
 3. Visual tests and their baselines both run inside the official Playwright Docker image that matches the
