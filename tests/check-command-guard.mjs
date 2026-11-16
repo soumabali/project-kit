@@ -85,5 +85,20 @@ check(/autonomy: auto \(bypass permissions mode\)/.test(out) && /Unattended deve
 out = session('default', { PROJECT_KIT_AUTONOMY: 'auto' });
 check(/autonomy: auto \(PROJECT_KIT_AUTONOMY\)/.test(out), 'PROJECT_KIT_AUTONOMY should show in the session context');
 
+// Prompt hook: SessionStart may lack permission_mode, so the first prompt of a bypass session announces auto once,
+// and a later switch back to default announces guarded once.
+const data = path.join(tmp, 'data');
+const prompt = (mode, id = 's1') => spawnSync(process.execPath, [path.join(root, 'scripts', 'hooks', 'prompt.mjs')], {
+  input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: id, cwd: proj, permission_mode: mode, prompt: 'go' }), encoding: 'utf8',
+  env: { ...clean, CLAUDE_PLUGIN_DATA: data },
+}).stdout;
+manifest({});
+spawnSync(process.execPath, [SESSION], { input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'startup', session_id: 's1' }), encoding: 'utf8', env: { ...clean, CLAUDE_PROJECT_DIR: proj, CLAUDE_PLUGIN_DATA: data } });
+check(/autonomy is now auto \(bypass permissions mode\)/.test(prompt('bypassPermissions')) && /Unattended development/.test(prompt('bypassPermissions', 's2')), 'the first prompt of a bypass session should announce auto');
+check(prompt('bypassPermissions') === '', 'auto should be announced only once per session');
+check(/autonomy is now guarded/.test(prompt('default')) && prompt('default') === '', 'switching back should announce guarded once');
+check(prompt('default', 's3') === '', 'a guarded session should stay silent');
+check(spawnSync(process.execPath, [path.join(root, 'scripts', 'hooks', 'prompt.mjs')], { input: JSON.stringify({ session_id: 's4', cwd: plain, permission_mode: 'bypassPermissions' }), encoding: 'utf8', env: { ...clean, CLAUDE_PLUGIN_DATA: data } }).stdout === '', 'the prompt hook ran outside a project-kit project');
+
 fs.rmSync(tmp, { recursive: true, force: true });
 if (failures) { console.error(`  ${failures} command guard check(s) failed`); process.exit(1); }

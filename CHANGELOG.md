@@ -29,9 +29,15 @@ All notable changes to project-kit are documented here. The format follows
   clients from the OpenAPI spec; Context7 companion for current library docs; `lessons.md` line per hotfix.
 - Starter repositories per stack (`kit.mjs starters set <stack> <git-url>`), cloned by Phase 00 instead of the
   framework generator.
-- The session hook prints rigor and autonomy, and suggests sync when the project is on an older kit version.
+- The session hook prints rigor and autonomy, and suggests sync when the project is on an older kit version. A
+  prompt hook tells Claude when the session's autonomy differs from what it was told (SessionStart input doesn't
+  always carry the permission mode, and Shift+Tab can change it mid-session).
 - Kit maintenance: trigger evals for the skills Claude starts on its own (`evals/`), a weekly check of pinned
   versions (`tests/check-pins.mjs`), and a Maintenance workflow that runs both.
+
+### Fixed
+- Windows: the session hook compares project paths without regard to case and normalizes them as `kit.mjs skip`
+  does, so the skip list and the repository-root check hold when a drive letter's case differs.
 
 ### Changed
 - Hooks are Node.js scripts (secret guard, git guard, session start), so they run on Windows without Git Bash. The

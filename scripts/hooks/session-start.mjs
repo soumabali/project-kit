@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readStdin, readJson, autonomyOf, rigorOf, newerVersion, KIT_VERSION, MANIFEST, PLUGIN_ROOT } from '../lib/project.mjs';
+import { remember, AUTO_NOTICE } from '../lib/announce.mjs';
 
 const KIT = path.join(PLUGIN_ROOT, 'scripts', 'kit.mjs');
 const DATA = process.env.CLAUDE_PLUGIN_DATA || '';
@@ -25,7 +26,9 @@ const git = (cwd, ...args) => {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
   return r.status === 0 ? r.stdout.replace(/\n$/, '') : null;
 };
-const real = p => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
+// Same normalization as kit.mjs skip; Windows paths compare without regard to case (d:\x and D:\X are one folder).
+const real = p => { try { return fs.realpathSync(path.resolve(p)); } catch { return path.resolve(p); } };
+const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
 const present = p => { try { fs.lstatSync(p); return true; } catch { return false; } };
 const q = s => JSON.stringify(s);
 
@@ -34,9 +37,8 @@ function printContext(root) {
   const a = autonomyOf(m, event.permission_mode);
   const rigor = rigorOf(m);
   say(`[project-kit] rigor: ${rigor} · autonomy: ${a.mode}${a.mode === 'auto' ? ` (${a.why})` : ''}`);
-  if (a.mode === 'auto') {
-    say("[project-kit] Unattended development: don't stop to ask or wait for approval. Decide, record the decision in the task file, and continue, as CLAUDE.md says under Autonomy. Its never-list still holds (production, deploys, pushing, secrets).");
-  }
+  if (a.mode === 'auto') say(AUTO_NOTICE);
+  remember(event.session_id, a.mode);
   if (m.kitVersion && newerVersion(KIT_VERSION, m.kitVersion)) {
     say(`[project-kit] This project is on kit v${m.kitVersion} and the plugin is v${KIT_VERSION}: suggest /project-kit:sync to the user once.`);
   }
@@ -70,11 +72,11 @@ function main() {
   try { gitDir = fs.statSync(path.join(here, '.git')).isDirectory(); } catch { gitDir = false; }
   if (!gitDir) return; // linked worktrees and submodules have a .git file
   const key = real(here);
-  if (real(top) !== key) return; // started at the repository root...
-  if (key === real(os.homedir())) return; // ...that isn't the home folder
+  if (!same(real(top), key)) return; // started at the repository root...
+  if (same(key, real(os.homedir()))) return; // ...that isn't the home folder
   if (DATA) {
     const list = (() => { try { return fs.readFileSync(path.join(DATA, 'skipped-projects.txt'), 'utf8').split(/\r?\n/); } catch { return []; } })();
-    if (list.includes(key)) return;
+    if (list.some(l => same(l.trim(), key))) return;
   }
   const dataArg = DATA ? ` --data-dir ${q(DATA)}` : '';
 

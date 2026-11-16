@@ -12,7 +12,7 @@ set permission rules. So project-kit has two halves:
 
 | Lives in the plugin (updates from its marketplace) | Written into each project (owned by the project) |
 |---|---|
-| 15 skills, 4 reviewer agents, 3 hooks, helper scripts, the rules and templates library | CLAUDE.md (a project profile block plus a kit-managed core block), `.claude/rules/kit/` for the stacks you use, `.claude/templates/`, permission rules in `.claude/settings.json`, tracking folders |
+| 15 skills, 4 reviewer agents, 4 hooks, helper scripts, the rules and templates library | CLAUDE.md (a project profile block plus a kit-managed core block), `.claude/rules/kit/` for the stacks you use, `.claude/templates/`, permission rules in `.claude/settings.json`, tracking folders |
 
 `/project-kit:sync` updates the kit-managed files in a project to the installed plugin version and never
 overwrites anything you edited locally.
@@ -184,7 +184,8 @@ In a project-kit project, the command guard hook decides about destructive comma
 unattended without changing anything the team shares. A session's autonomy is, first match wins:
 `PROJECT_KIT_AUTONOMY=auto|guarded` in the environment that starts Claude Code; `auto` when the session runs with
 `--dangerously-skip-permissions` (or is switched to bypass mode); otherwise the project default from
-`/project-kit:autonomy` (`guarded` unless set).
+`/project-kit:autonomy` (`guarded` unless set). Claude is told the session's mode at the start and again whenever it
+changes (for example after switching to bypass mode with Shift+Tab).
 
 ```text
 claude --dangerously-skip-permissions            # auto for this session
