@@ -160,7 +160,7 @@ const detected = (d) => {
   write(d, 'apps/engine/Cargo.toml', '[package]\nname = "engine"\n\n[dependencies]\naxum = "0.8"\n');
   write(d, 'apps/bridge/Cargo.toml', '[package]\nname = "bridge"\n\n[dependencies]\nrmcp = { version = "0.8", features = ["server"] }\n');
   write(d, 'apps/live/mix.exs', '');
-  write(d, 'apps/we"ird/go.mod', 'module weird\n');
+  write(d, 'apps/we#ird/go.mod', 'module weird\n');
   const want = [
     'agent=node-typescript+mcp:apps/agent', 'api=laravel:07-application/api', 'assistant=python+mcp:services/assistant',
     'billing=go:services/billing', 'bridge=rust+mcp:apps/bridge', 'catalog=java-spring:services/catalog', 'e2e=playwright:e2e',
@@ -171,7 +171,7 @@ const detected = (d) => {
   const got = detected(d);
   check(got.apps === want, `detect found:\n      ${got.apps}\n    wanted:\n      ${want}`);
   check(got.notes.some(n => n.startsWith('apps/android: Android app')) && got.notes.some(n => n.startsWith('apps/live: Elixir')), `detect notes: ${got.notes}`);
-  check(got.notes.some(n => n.startsWith('apps/we"ird: skipped')), 'a folder name unsafe for globs should be skipped with a note');
+  check(got.notes.some(n => n.startsWith('apps/we#ird: skipped')), 'a folder name unsafe for globs should be skipped with a note');
   const human = kit(d, 'detect');
   check(/Install flags: --app api=laravel:07-application\/api/.test(human.stdout), 'detect should print install flags');
   fs.rmSync(d, { recursive: true, force: true });
