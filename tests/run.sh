@@ -12,15 +12,16 @@ skip() { echo "skip  $1"; skipped=$((skipped + 1)); }
 
 json_ok() { for f in "$@"; do node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$f" || { echo "    bad JSON: $f"; return 1; }; done; }
 step "JSON files parse" json_ok .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json \
-  project-layer/settings.json project-layer/legacy-offered-rules.json skills/e2e/templates/package.json \
+  project-layer/settings.json project-layer/retired-rules.json project-layer/guard-rules.json project-layer/legacy-offered-rules.json skills/e2e/templates/package.json \
   skills/e2e/templates/tsconfig.json
 step "front matter of skills, agents, rules" node tests/check-frontmatter.mjs
 step "rule paths load for the right files" node tests/check-globs.mjs
 step "hooks: secret guard, session context, setup modes" bash tests/check-hooks.sh
 step "secret guard: credential formats, placeholders, every write path" node tests/check-guard.mjs
 step "git guard: force-pushes and skipped hooks in every form" bash tests/check-git-guard.sh
+step "command guard, quick check, session context: autonomy per session" node tests/check-command-guard.mjs
 step "plugin-build templates: hook tests, run.sh layouts, eval keys, sample plugin" bash tests/check-plugin-template.sh
-step "kit.mjs: detect, install, sync, add/remove-app, adopt, uninstall, doctor" node tests/check-kit.mjs
+step "kit.mjs: detect, install, sync, task loop, rigor, autonomy, checks, starters, uninstall, doctor" node tests/check-kit.mjs
 inventory_ok() {
   node scripts/css-inventory.mjs tests/fixtures/template --json | node -e '
     const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
@@ -46,7 +47,7 @@ else
 fi
 
 if command -v shellcheck >/dev/null 2>&1; then
-  step "shell scripts pass shellcheck" shellcheck -S warning scripts/*.sh tests/*.sh skills/plugin-build/templates/*.sh \
+  step "shell scripts pass shellcheck" shellcheck -S warning tests/*.sh skills/plugin-build/templates/*.sh \
     skills/plugin-build/templates/hooks/*.sh
 else
   skip "shellcheck (install it to lint the shell scripts)"

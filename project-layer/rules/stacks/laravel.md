@@ -3,7 +3,7 @@ paths:
   - "{{APP}}/**/*.php"
   - "{{APP}}/composer.json"
   - "{{APP}}/resources/js/**/*.{ts,tsx,js,jsx,vue,svelte}"
-kit: {"name": "Laravel", "commands": {"setup": "composer run setup", "dev": "composer run dev", "test": "composer test", "testOne": "php artisan config:clear && php artisan test --filter=<Name>", "lint": "vendor/bin/pint --test", "types": "vendor/bin/phpstan analyse", "build": "npm run build", "audit": "composer audit"}}
+kit: {"name": "Laravel", "commands": {"setup": "composer run setup", "dev": "composer run dev", "test": "composer test", "testOne": "php artisan config:clear && php artisan test --filter=<Name>", "lint": "vendor/bin/pint --test", "types": "vendor/bin/phpstan analyse", "build": "npm run build", "audit": "composer audit"}, "check": {"ext": "php", "cmd": "php -l {file}", "requires": "php"}}
 ---
 
 # Stack: Laravel (PHP)

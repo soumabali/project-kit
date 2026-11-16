@@ -12,6 +12,7 @@ paths:
   - "**/{handlers,handler,resolvers,graphql,routers,viewsets}/**/*"
   - "**/{urls,views,viewsets,serializers,routers,routes}.py"
   - "**/*handler*.go"
+  - "**/{handlers,routes,router}.rs"
 ---
 
 # API Rules
@@ -21,6 +22,8 @@ paths:
 - One success envelope and one error format for the whole API; the stack rules file or stack skill names it. Errors carry a machine-readable code, a human message, and a correlation id, never a stack trace.
 - Every list endpoint is paginated (cursor, or page and limit with a maximum), sorted stably, and filterable only by allowlisted fields.
 - POSTs that create payments or orders accept an `Idempotency-Key`. Webhook handlers are idempotent.
+- Clients (web, mobile, other services) use types or a client generated from the OpenAPI spec, regenerated in the
+  same commit as a spec change, so a contract mismatch fails the build instead of the user.
 - A breaking change (removed or renamed field, changed type or meaning, new required input) needs a new API version, or an ADR plus user approval. Additive changes are fine.
 - Timestamps are ISO 8601 in UTC. Money is integer minor units plus a currency code.
 - The spec documents auth requirements and rate limits for each endpoint.

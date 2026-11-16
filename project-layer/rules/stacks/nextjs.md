@@ -3,7 +3,7 @@ paths:
   - "{{APP}}/**/*.{ts,tsx,js,jsx,mjs,cjs}"
   - "{{APP}}/next.config.*"
   - "{{APP}}/package.json"
-kit: {"name": "Next.js (React)", "commands": {"setup": "pnpm install", "dev": "pnpm dev", "test": "pnpm vitest run", "testOne": "pnpm vitest run -t \"<name>\"", "lint": "pnpm eslint .", "types": "pnpm next typegen && pnpm tsc --noEmit", "build": "pnpm build", "audit": "pnpm audit --audit-level high"}}
+kit: {"name": "Next.js (React)", "commands": {"setup": "pnpm install", "dev": "pnpm dev", "test": "pnpm vitest run", "testOne": "pnpm vitest run -t \"<name>\"", "lint": "pnpm eslint .", "types": "pnpm next typegen && pnpm tsc --noEmit", "build": "pnpm build", "audit": "pnpm audit --audit-level high"}, "check": {"ext": "ts,tsx,js,jsx,mjs,cjs", "cmd": "npx --no-install eslint --no-warn-ignored {file}", "requires": "node_modules/.bin/eslint"}}
 ---
 
 # Stack: Next.js (React)

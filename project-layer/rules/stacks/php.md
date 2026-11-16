@@ -4,7 +4,7 @@ paths:
   - "{{APP}}/**/*.twig"
   - "{{APP}}/composer.json"
   - "{{APP}}/config/**/*.{yaml,yml}"
-kit: {"name": "PHP (Symfony, WordPress, plain)", "commands": {"setup": "composer install", "dev": "php -S localhost:8000 -t public", "test": "vendor/bin/phpunit", "testOne": "vendor/bin/phpunit --filter <Name>", "lint": "vendor/bin/php-cs-fixer fix --dry-run --diff", "types": "vendor/bin/phpstan analyse", "audit": "composer audit"}}
+kit: {"name": "PHP (Symfony, WordPress, plain)", "commands": {"setup": "composer install", "dev": "php -S localhost:8000 -t public", "test": "vendor/bin/phpunit", "testOne": "vendor/bin/phpunit --filter <Name>", "lint": "vendor/bin/php-cs-fixer fix --dry-run --diff", "types": "vendor/bin/phpstan analyse", "audit": "composer audit"}, "check": {"ext": "php", "cmd": "php -l {file}", "requires": "php"}}
 ---
 
 # Stack: PHP (Symfony, WordPress, plain PHP)

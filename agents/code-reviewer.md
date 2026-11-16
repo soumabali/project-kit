@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Independent reviewer for one task's diff before it closes. Checks correctness against the acceptance criteria, that each criterion has a test that fails without the change, scope and simplicity, and the project's rules. Use for every Task and Hotfix; it did not write the code it reviews.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit
 ---

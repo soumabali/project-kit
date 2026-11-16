@@ -11,7 +11,8 @@ reference), reference images in `06-technical-docs/design/references/`, and toke
 Design decisions belong to the user: mark anything you inferred as **inferred** and get it confirmed.
 
 ## 1. Identify the source and read its procedure
-Read `${CLAUDE_PLUGIN_ROOT}/skills/design-intake/sources.md` and follow the section for each source the project has:
+Read `${CLAUDE_PLUGIN_ROOT}/skills/design-intake/sources.md` and follow the section for each source the project has
+(and `${CLAUDE_PLUGIN_ROOT}/skills/design-intake/patterns.md` for the screen types the product has):
 DESIGN.md · HTML template or theme · images (mockups, theme screenshots, PDFs) · Figma · brand guide · live site · nothing yet.
 The helper scripts it mentions live in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 
@@ -21,6 +22,13 @@ The helper scripts it mentions live in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 - Tokens: semantic names (`primary`, `on-primary`, `surface`, `on-surface`, `error`, …), a typography scale
   (`headline-*`, `body-*`, `label-*`), `rounded`, `spacing`, and components with `{path.to.token}` references.
 - Layout lists the breakpoints the screens must work at (default 390, 768, 1440) and the content max width.
+- Replace the starter's `UNCHOSEN` name and description with the product's; a DESIGN.md that still says `UNCHOSEN`
+  blocks UI work.
+- Name the component base each UI app builds on (shadcn/ui or Radix for React, Nuxt UI, PrimeVue, or shadcn-vue for
+  Vue, Filament for Laravel admin panels, Material 3 for Flutter, or the template's own components) and theme it
+  from the tokens. One base per app, recorded in an ADR; never mix two.
+- Do's and Don'ts: write rules specific to this product (what its primary action looks like, how dense its tables
+  are, which states use color), not generic advice.
 - Lint until clean: `npx @google/design.md lint DESIGN.md`. Fix every error; fix or justify every warning (contrast
   warnings are fixed, not justified).
 - If impeccable is installed and PRODUCT.md is missing, run `/impeccable init` so its product context matches the PRD.
@@ -41,7 +49,7 @@ The helper scripts it mentions live in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 - Mirror the list in the e2e app's `screens.ts` (see `/project-kit:e2e`) so verification covers every screen.
 
 ## 5. Confirm and record
-Show the user a summary: palette with contrast results, type scale, spacing, components, screens, and every
+Show the user a summary, with the rendered screens (directions or references) beside it: palette with contrast results, type scale, spacing, components, screens, and every
 inferred decision. Record their answers in DESIGN.md. Later token changes need approval (CLAUDE.md §5) and a
 diff from the committed version (before, then after):
 `git show HEAD:DESIGN.md > /tmp/DESIGN.before.md && npx @google/design.md diff /tmp/DESIGN.before.md DESIGN.md --format text`.

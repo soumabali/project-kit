@@ -22,11 +22,14 @@ in its plan and gets the user's approval first. Phase 00 has none yet: its tasks
 data model, API spec, and ADR.
 - Data model: sections of `06-technical-docs/data-model.md`
 - API: paths in `06-technical-docs/api/openapi.yaml`
-- Screens: ids in `06-technical-docs/design/screens.md`, built to the tokens and rules in `DESIGN.md`
+- Screens: ids in `06-technical-docs/design/screens.md`, built to the tokens and rules in `DESIGN.md`; for UI work,
+  the prototype in `06-technical-docs/design/prototype/` the user walked through (`/project-kit:prototype`)
 - Decisions: ADRs in `06-technical-docs/decisions/`
 
 ## Tasks
-Status lives in each task file, so task branches never edit this table.
+Status lives in each task file, so task branches never edit this table. The task skill adds rows. The first task is a
+thin slice: the simplest version of the main journey working end to end (UI, API, database), shown to the user
+before the other tasks start, so a misunderstanding costs a day, not a phase.
 
 | id | title | app | depends_on |
 |---|---|---|---|

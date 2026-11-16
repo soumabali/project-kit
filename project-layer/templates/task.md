@@ -65,8 +65,10 @@ Files to change, then bite-sized steps, each with the check that proves it.
 Filled in at close, or when parking the task.
 - **What changed:**
 - **Checks run:** `<command>` → result, one line each
+- **Evidence:** per acceptance criterion, what the user can check without running anything (screenshot path,
+  recording, or command and output)
 - **Seen red first:** <test name>
 - **UI verification:** screens and breakpoints checked, open differences (if `ui: true`)
-- **Decisions:** link an ADR for anything lasting
+- **Decisions:** calls made without asking (in `auto` autonomy) with why and how to undo; an ADR for anything lasting
 - **Follow-ups:** new task ids (never TODOs in code)
 - **Stopped at / next step:** only while the task is parked

@@ -1,7 +1,7 @@
 ---
 version: alpha
-name: Product Design System
-description: Starter tokens. Replace every value with the real ones from the design source, then lint.
+name: UNCHOSEN starter
+description: UNCHOSEN. Placeholder tokens so the file lints; not a design. Run /project-kit:design-intake to pick a direction, then replace every value and this description.
 colors:
   primary: "#1F4FD8"
   primary-hover: "#1A43B8"
@@ -115,7 +115,7 @@ components:
     textColor: "{colors.warning}"
 ---
 
-# Product Design System
+# UNCHOSEN starter (not a design yet)
 
 ## Overview
 Describe the personality in two or three sentences: who uses the product, how it should feel (calm or

@@ -22,18 +22,25 @@ If `03-phases/phase-00-foundation.md` already exists, skip to step 5 and resume 
 - Inspect the rest: framework versions (lockfiles), package managers, Docker files, CI, tests, docs, an existing
   CLAUDE.md or AGENTS.md, and design sources (DESIGN.md, `*.fig` exports, HTML templates, image folders).
 - Where detection misses an app or picks the wrong stack, use the closest id from `kit.mjs stacks`. For a stack
-  the kit lacks, install with the closest one now and tell the user to run `/project-kit:add-stack <stack> <path>`
-  afterwards (only the user can start that skill). Web UIs also get an `e2e` app on the `playwright` stack
+  the kit lacks, install with the closest one now, then run `/project-kit:add-stack <stack> <path>` after step 4.
+- New apps: `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" starters` lists the user's starter repositories per stack
+  (their own templates with auth, CI, Docker, components, and common modules already done). Phase 00 clones a
+  starter instead of running the framework's generator when one fits. Web UIs also get an `e2e` app on the `playwright` stack
   (default path `07-application/e2e`).
 
 ## 2. Ask once
 Skip anything the repo already answered.
 - One AskUserQuestion call, up to four multiple-choice questions: the apps and stacks you found (confirm or
   correct; new projects default to `07-application/<app>`, existing repos keep their layout, and an app at the repo
-  root uses path `.`), the design source (DESIGN.md, HTML template, JPG/PNG mockups or theme screenshots, Figma,
-  live site, none yet), data sensitivity (none, personal data, payments, health), and hosting.
-- Then, in one plain-text message: what the product is, who it's for, why it exists, and its locales. Save any
-  client inputs the user shares (briefs, RFPs, meeting notes, reference links) in `01-ideas/`.
+  root uses path `.`), the rigor (prototype for a demo, spike, or internal tool; standard for most client work;
+  production for long-lived or regulated systems), the design source (DESIGN.md, HTML template, JPG/PNG mockups or
+  theme screenshots, Figma, live site, none yet), and data sensitivity (none, personal data, payments, health).
+- Then, in one plain-text message: what the product is, who it's for, why it exists, its locales, hosting, two or
+  three products they like or compete with, and the client's key terms. Save client inputs (briefs, RFPs, meeting
+  notes, reference links, sample data) in `01-ideas/`.
+- In a project already in `auto` autonomy mode, or when the user said not to ask (an unattended run): skip the
+  questions, take the detected apps and what the repo and `01-ideas/` say, leave the rest `TBD` in the profile, and
+  list in STATUS.md what the user still has to confirm.
 
 ## 3. Check companions
 Read `${CLAUDE_PLUGIN_ROOT}/skills/kickoff/companions.md`. Compare its list with the skills available in this
@@ -55,16 +62,20 @@ Not installed yet:
 2. If CLAUDE.md already exists, read it, tell the user what conflicts with the kit, and rerun with
    `--merge-claude-md` once they agree. After merging, remove the contradictions they approve. Existing templates
    and rules are kept; the output lists them.
-3. Run the same command without `--dry-run`.
-4. Fill **What**, **Why**, and **Environments** in the CLAUDE.md profile block from the interview.
+3. Run the same command without `--dry-run`, with `--rigor <level>` from the interview. Add `--autonomy auto` only
+   when the user wants unattended development by default for everyone in the repo; a single session gets it with
+   `PROJECT_KIT_AUTONOMY=auto` or `--dangerously-skip-permissions` anyway.
+4. Fill **What**, **Why**, and **Environments** in the CLAUDE.md profile block from the interview, and the
+   client's terms in `06-technical-docs/glossary.md`.
 - No Node.js available: follow the file mapping in `${CLAUDE_PLUGIN_ROOT}/skills/kickoff/manual-install.md` instead.
 
 ## 5. Phase 00 foundation
-If `03-phases/phase-00-foundation.md` exists, resume at its first task that isn't `done`. Otherwise create it from
-the phase template, plus one task file per group in `${CLAUDE_PLUGIN_ROOT}/skills/kickoff/phase-00.md`. Phase 00
+If `03-phases/phase-00-foundation.md` exists, resume at its first task that isn't `done`. Otherwise create it with
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" new phase --phase phase-00 --title "Foundation"`, plus one task per group that
+`${CLAUDE_PLUGIN_ROOT}/skills/kickoff/phase-00.md` lists for the project's rigor, each with `kit.mjs new task`. Phase 00
 tasks are ordinary tasks: global ids, a branch and commits per task (CLAUDE.md §7), the build loop, and the
 Definition of Done. Along the way:
-- Apps with UI: run `/project-kit:design-intake` before building screens.
+- Apps with UI: run `/project-kit:design-intake` before building screens; DESIGN.md starts `UNCHOSEN`.
 - Every app: run `/project-kit:e2e` to set up its real tests (integration with a real database, end-to-end against a
   running build).
 - MCP apps: follow `/project-kit:mcp-build` for scaffolding and tests.

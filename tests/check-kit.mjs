@@ -153,17 +153,20 @@ const detected = (d) => {
   write(d, 'site/index.html', '<!doctype html>\n');
   write(d, 'apps/android/build.gradle.kts', '');
   write(d, 'apps/android/app/src/main/AndroidManifest.xml', '<manifest/>');
-  write(d, 'apps/engine/Cargo.toml', '[package]\nname = "engine"\n');
+  write(d, 'apps/engine/Cargo.toml', '[package]\nname = "engine"\n\n[dependencies]\naxum = "0.8"\n');
+  write(d, 'apps/bridge/Cargo.toml', '[package]\nname = "bridge"\n\n[dependencies]\nrmcp = { version = "0.8", features = ["server"] }\n');
+  write(d, 'apps/live/mix.exs', '');
   write(d, 'apps/we"ird/go.mod', 'module weird\n');
   const want = [
     'agent=node-typescript+mcp:apps/agent', 'api=laravel:07-application/api', 'assistant=python+mcp:services/assistant',
-    'billing=go:services/billing', 'catalog=java-spring:services/catalog', 'e2e=playwright:e2e', 'git=python:services/git',
+    'billing=go:services/billing', 'bridge=rust+mcp:apps/bridge', 'catalog=java-spring:services/catalog', 'e2e=playwright:e2e',
+    'engine=rust:apps/engine', 'git=python:services/git',
     'mobile=flutter:mobile', 'payments=dotnet+mcp:services/payments', 'shop=ruby-rails:services/shop',
     'site=html-css:site', 'tools=node-typescript:apps/tools', 'web=nextjs:07-application/web',
   ].join(' ');
   const got = detected(d);
   check(got.apps === want, `detect found:\n      ${got.apps}\n    wanted:\n      ${want}`);
-  check(got.notes.some(n => n.startsWith('apps/android: Android app')) && got.notes.some(n => n.startsWith('apps/engine: Rust')), `detect notes: ${got.notes}`);
+  check(got.notes.some(n => n.startsWith('apps/android: Android app')) && got.notes.some(n => n.startsWith('apps/live: Elixir')), `detect notes: ${got.notes}`);
   check(got.notes.some(n => n.startsWith('apps/we"ird: skipped')), 'a folder name unsafe for globs should be skipped with a note');
   const human = kit(d, 'detect');
   check(/Install flags: --app api=laravel:07-application\/api/.test(human.stdout), 'detect should print install flags');
@@ -357,11 +360,11 @@ const snapshot = (dir) => {
   const k = fresh();
   kit(k, 'install', '--app', 'api=go:api');
   const s = JSON.parse(read(k, '.claude/settings.json'));
-  s.permissions.ask = s.permissions.ask.filter(x => x !== 'Bash(git push *)');
+  s.permissions.deny = s.permissions.deny.filter(x => x !== 'Read(*.p8)');
   write(k, '.claude/settings.json', JSON.stringify(s, null, 2));
   kit(k, 'add-app', '--app', 'web=nextjs:web');
   kit(k, 'sync');
-  check(!JSON.parse(read(k, '.claude/settings.json')).permissions.ask.includes('Bash(git push *)'), 'a removed permission rule came back');
+  check(!JSON.parse(read(k, '.claude/settings.json')).permissions.deny.includes('Read(*.p8)'), 'a removed permission rule came back');
   fs.rmSync(k, { recursive: true, force: true });
 
   // Line endings and indentation of merged files come back exactly after uninstall.
@@ -397,10 +400,10 @@ const snapshot = (dir) => {
   m.kitVersion = '1.0.0';
   write(e, '.claude/project-kit.json', JSON.stringify(m));
   const s = JSON.parse(read(e, '.claude/settings.json'));
-  s.permissions.ask = s.permissions.ask.filter(x => x !== 'Bash(git push *)');
+  s.permissions.deny = s.permissions.deny.filter(x => x !== 'Read(*.pem)');
   write(e, '.claude/settings.json', JSON.stringify(s, null, 2));
   check(kit(e, 'sync').status === 0, 'sync of a 1.0.0 manifest failed');
-  check(!JSON.parse(read(e, '.claude/settings.json')).permissions.ask.includes('Bash(git push *)'), 'sync of a 1.0.0 manifest re-added a removed rule');
+  check(!JSON.parse(read(e, '.claude/settings.json')).permissions.deny.includes('Read(*.pem)'), 'sync of a 1.0.0 manifest re-added a removed rule');
   const legacy = JSON.parse(read(e, '.claude/project-kit.json'));
   delete legacy.created; delete legacy.profileHash; delete legacy.gitignoreAdded;
   write(e, '.claude/project-kit.json', JSON.stringify(legacy));
@@ -528,6 +531,128 @@ const snapshot = (dir) => {
   check(i.status === 0 && read(p, 'CLAUDE.md').includes('Claude Code skills, agents, hooks, and plugins') && fs.existsSync(path.join(p, '.claude/rules/kit/stack-claude-code.md')), `installing a plugin repo failed: ${i.stdout}${i.stderr}`);
   fs.rmSync(p, { recursive: true, force: true });
   fs.rmSync(q, { recursive: true, force: true });
+}
+
+// 1.5.0: ask rules moved from settings to the command guard hook; sync takes out the ones earlier versions added.
+{
+  const d = fresh();
+  check(kit(d, 'install', '--app', 'svc=rust:07-application/svc').status === 0, 'install for the 1.5.0 checks failed');
+  const perms = () => JSON.parse(read(d, '.claude/settings.json')).permissions;
+  const manifest = () => JSON.parse(read(d, '.claude/project-kit.json'));
+  check(!perms().ask && manifest().rigor === 'standard' && manifest().autonomy === 'guarded', `a fresh install should have no ask rules, rigor standard, autonomy guarded: ${JSON.stringify(perms())}`);
+  check(read(d, 'CLAUDE.md').includes('| svc | `07-application/svc` | Rust |') && perms().deny.includes('Read(~/.cargo/credentials*)'), 'Rust app row or cargo credentials rule missing');
+  check(fs.existsSync(path.join(d, '06-technical-docs/glossary.md')), 'install should create the glossary');
+  // A project from 1.4: the kit had added ask rules and auto deny rules; the user added one of each too.
+  const m = manifest();
+  const s = JSON.parse(read(d, '.claude/settings.json'));
+  s.permissions.ask = ['Bash(rm -rf *)', 'Bash(git push *)', 'Bash(make deploy*)'];
+  s.permissions.deny.splice(1, 0, 'Bash(printenv*)', 'Bash(my-own-deny)');
+  write(d, '.claude/settings.json', JSON.stringify(s, null, 2));
+  m.settingsAdded.ask = ['Bash(rm -rf *)', 'Bash(git push *)'];
+  m.settingsAdded.deny = [...m.settingsAdded.deny, 'Bash(printenv*)'];
+  m.kitVersion = '1.4.0';
+  write(d, '.claude/project-kit.json', JSON.stringify(m, null, 2));
+  const sy = kit(d, 'sync');
+  check(sy.status === 0, `sync of a 1.4.0 project failed: ${sy.stdout}${sy.stderr}`);
+  check(JSON.stringify(perms().ask) === '["Bash(make deploy*)"]', `sync should take out only the ask rules the kit added: ${JSON.stringify(perms().ask)}`);
+  check(!perms().deny.includes('Bash(printenv*)') && perms().deny.includes('Bash(my-own-deny)') && perms().deny.includes('Read(.env)'), 'sync should take out the retired deny rule and keep the rest');
+  check(!(manifest().settingsAdded.ask || []).includes('Bash(rm -rf *)'), 'the manifest still records a retired rule as added');
+  check(/1 ask rule\(s\).*make deploy/.test(kit(d, 'doctor').stdout), 'doctor should list the ask rule that still prompts');
+  // Rigor and autonomy are manifest fields.
+  check(/rigor: standard/.test(kit(d, 'rigor').stdout) && kit(d, 'rigor', 'prototype').status === 0 && manifest().rigor === 'prototype', 'rigor command failed');
+  check(kit(d, 'autonomy', 'auto').status === 0 && manifest().autonomy === 'auto' && /autonomy guarded → auto/.test(read(d, '05-progress/log.md')), 'autonomy command failed');
+  check(kit(d, 'autonomy', 'yolo').status === 2 && kit(d, 'rigor', 'sloppy').status === 2, 'unknown modes should be refused');
+  check(/rigor: prototype · autonomy: auto/.test(kit(d, 'doctor').stdout), 'doctor should report rigor and autonomy');
+  // A manifest without a rigor (from before 1.5.0) is production.
+  const old = manifest(); delete old.rigor; write(d, '.claude/project-kit.json', JSON.stringify(old, null, 2));
+  check(/rigor: production/.test(kit(d, 'rigor').stdout), 'a manifest without rigor should read as production');
+  const u = kit(d, 'uninstall');
+  check(u.status === 0 && JSON.parse(read(d, '.claude/settings.json')).permissions.deny.includes('Bash(my-own-deny)'), `uninstall dropped the project's own rule: ${u.stdout}`);
+  fs.rmSync(d, { recursive: true, force: true });
+  check(kit(fresh(), 'install', '--rigor', 'heroic', '--app', 'x=go:x').status === 2, 'install should refuse an unknown rigor');
+}
+
+// The daily loop: new, start, set, next, board, with STATUS.md and the log kept current.
+{
+  const d = fresh();
+  const git = (...a) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...a], { cwd: d, encoding: 'utf8' });
+  git('commit', '-q', '--allow-empty', '-m', 'init');
+  kit(d, 'install', '--app', 'web=vite-spa:web', '--app', 'api=laravel:api');
+  git('add', '-A'); git('commit', '-q', '-m', 'kit');
+  check(kit(d, 'new', 'phase', '--title', 'Booking MVP').status === 0 && fs.existsSync(path.join(d, '03-phases/phase-01-booking-mvp.md')), 'new phase failed');
+  check(kit(d, 'new', 'task', '--title', 'List rooms').status === 2, 'new task without --app in a two-app project should be refused');
+  check(kit(d, 'new', 'task', '--title', 'List rooms', '--app', 'web', '--ui').status === 0, 'new task failed');
+  const t2 = kit(d, 'new', 'task', '--title', 'Book a room: create # validate', '--app', 'api', '--security', '--depends', 'task-001');
+  check(t2.status === 0, `second new task failed: ${t2.stderr}`);
+  const f2 = '04-tasks/phase-01/task-002-book-a-room-create-validate.md';
+  const t2text = read(d, f2);
+  check(/^title: "Book a room: create # validate"/m.test(t2text) && /^security_sensitive: true/m.test(t2text) && /^depends_on: \[task-001\]/m.test(t2text) && /^# task-002: Book a room/m.test(t2text), `task fields not filled:\n${t2text.slice(0, 600)}`);
+  check(/^status: todo {16}# backlog/m.test(t2text), 'the status comment lost its column');
+  const phase = read(d, '03-phases/phase-01-booking-mvp.md');
+  check(phase.includes('| task-001 | List rooms | web |  |') && phase.includes('| task-002 | Book a room: create # validate | api | task-001 |') && !/\| task-001 \| \|/.test(phase), `phase table not updated:\n${phase}`);
+  check(kit(d, 'new', 'adr', '--title', 'Use TanStack Query').status === 0 && fs.existsSync(path.join(d, '06-technical-docs/decisions/ADR-001-use-tanstack-query.md')), 'new adr failed');
+  check(kit(d, 'new', 'hotfix', '--title', 'Login loop').status === 2, 'a hotfix needs --app in a two-app project');
+  check(kit(d, 'new', 'hotfix', '--title', 'Login loop', '--app', 'api').status === 0 && fs.existsSync(path.join(d, '04-tasks/hotfix/hotfix-001-login-loop.md')), 'new hotfix failed');
+  let n = kit(d, 'next', '--json');
+  check(JSON.parse(n.stdout).map(t => t.id).join() === 'hotfix-001', `hotfixes come first: ${n.stdout}`);
+  kit(d, 'set', 'hotfix-001', 'cancelled');
+  n = kit(d, 'next', '--parallel', '--json');
+  check(JSON.parse(n.stdout).map(t => t.id).join() === 'task-001', `task-002 waits on task-001: ${n.stdout}`);
+  // Ids look across branches: a task created on another branch reserves its number.
+  git('add', '-A'); git('commit', '-q', '-m', 'plan');
+  git('switch', '-q', '-c', 'other'); kit(d, 'new', 'task', '--title', 'Elsewhere', '--app', 'web'); git('add', '-A'); git('commit', '-q', '-m', 'other'); git('switch', '-q', 'master');
+  if (git('branch', '--show-current').stdout.trim() !== 'master') git('switch', '-q', 'main');
+  check(/task-004/.test(kit(d, 'new', 'task', '--title', 'After', '--app', 'web', '--dry-run').stdout), 'the next id should skip one used on another branch');
+  // Start: refuses a dirty tree, then branches and marks the task.
+  write(d, 'CHANGELOG.md', `${read(d, 'CHANGELOG.md')}\nlocal edit\n`);
+  check(kit(d, 'start', 'task-001').status === 2, 'start should refuse a dirty tree');
+  git('checkout', '--', 'CHANGELOG.md');
+  const st = kit(d, 'start', 'task-001');
+  check(st.status === 0 && git('branch', '--show-current').stdout.trim() === 'task-001-list-rooms', `start failed: ${st.stdout}${st.stderr}`);
+  check(/^status: in-progress/m.test(read(d, '04-tasks/phase-01/task-001-list-rooms.md')), 'start did not mark the task in-progress');
+  check(/^Active task: task-001 List rooms$/m.test(read(d, '05-progress/STATUS.md')) && /^Branch: task-001-list-rooms$/m.test(read(d, '05-progress/STATUS.md')), `STATUS.md not refreshed:\n${read(d, '05-progress/STATUS.md')}`);
+  check(kit(d, 'set', 'task-002', 'blocked').status === 2, 'blocked without a reason should be refused');
+  check(kit(d, 'set', 'task-001', 'finished').status === 2, 'an unknown status should be refused');
+  kit(d, 'set', 'task-001', 'done');
+  check(/^Active task: none$/m.test(read(d, '05-progress/STATUS.md')) && /^Queue: task-002/m.test(read(d, '05-progress/STATUS.md')), 'STATUS.md queue not refreshed after done');
+  kit(d, 'set', 'task-002', 'blocked', '--reason', 'needs the payment sandbox key');
+  check(/^blocked_reason: "?needs the payment sandbox key"?/m.test(read(d, f2)), 'blocked reason not recorded');
+  const b = kit(d, 'board');
+  check(/blocked 1/.test(b.stdout) && /needs the payment sandbox key/.test(b.stdout), `board: ${b.stdout}`);
+  check(/task-001 in-progress → done/.test(read(d, '05-progress/log.md')), 'status changes are not logged');
+  fs.rmSync(d, { recursive: true, force: true });
+}
+
+// Quick checks, starter repositories, and the new frontend stacks.
+{
+  const d = fresh();
+  kit(d, 'install', '--app', 'web=react-native:mobile', '--app', 'api=go:api');
+  check(/api\s+gofmt -e -l \{file\}/.test(kit(d, 'check').stdout), 'the Go quick check should come from the stack');
+  kit(d, 'check', 'api', '--off');
+  check(/api\s+off/.test(kit(d, 'check').stdout), 'check --off did not turn it off');
+  kit(d, 'check', 'api', '--cmd', 'node lint.js {file}', '--ext', 'go');
+  check(JSON.parse(read(d, '.claude/project-kit.json')).checks.api.cmd === 'node lint.js {file}', 'check --cmd not saved');
+  kit(d, 'check', 'api', '--reset');
+  check(!('api' in JSON.parse(read(d, '.claude/project-kit.json')).checks), 'check --reset did not clear it');
+  check(fs.existsSync(path.join(d, '.claude/rules/kit/stack-react-native.md')), 'React Native rule not installed');
+  fs.rmSync(d, { recursive: true, force: true });
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-home-'));
+  const env = { ...process.env, PROJECT_KIT_HOME: home };
+  const st = (...a) => spawnSync(process.execPath, [KIT, 'starters', ...a], { encoding: 'utf8', env });
+  check(st('set', 'laravel', 'https://github.com/acme/laravel-starter').status === 0 && /laravel\s+https:\/\/github\.com\/acme/.test(st().stdout), 'starters set failed');
+  check(st('set', 'cobol', 'https://x/y').status === 2 && st('set', 'go', 'not a url').status === 2, 'starters should refuse unknown stacks and bad URLs');
+  check(st('remove', 'laravel').status === 0 && /No starter/.test(st().stdout), 'starters remove failed');
+  fs.rmSync(home, { recursive: true, force: true });
+
+  const f = fresh();
+  write(f, 'apps/spa/package.json', JSON.stringify({ dependencies: { react: '19.0.0' }, devDependencies: { vite: '7.0.0' } }));
+  write(f, 'apps/vue/package.json', JSON.stringify({ dependencies: { vue: '3.5.0' } }));
+  write(f, 'apps/vue/vite.config.ts', 'export default {};\n');
+  write(f, 'apps/mobile/package.json', JSON.stringify({ dependencies: { expo: '54.0.0', 'react-native': '0.82.0', react: '19.0.0' } }));
+  write(f, 'apps/ssr/package.json', JSON.stringify({ dependencies: { react: '19.0.0', express: '5.0.0' }, devDependencies: { vite: '7.0.0' } }));
+  check(detected(f).apps === 'mobile=react-native:apps/mobile spa=vite-spa:apps/spa ssr=node-typescript:apps/ssr vue=vite-spa:apps/vue', `frontend detection: ${detected(f).apps}`);
+  fs.rmSync(f, { recursive: true, force: true });
 }
 
 if (failures) { console.error(`  ${failures} kit check(s) failed`); process.exit(1); }

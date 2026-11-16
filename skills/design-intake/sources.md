@@ -44,5 +44,16 @@ Screenshot it with Playwright at each breakpoint and read computed styles of key
 (`getComputedStyle` via `page.evaluate`) to extract real values. Only for sites the user owns or has rights to.
 
 ## Nothing yet
-Draft DESIGN.md from the PRD and the user's preferences (or, when impeccable is installed, run `/impeccable init`
-for PRODUCT.md, then `/impeccable shape`), show two or three directions as rendered screens, and let the user choose before any build work.
+No design exists, so the direction is the user's choice, made by looking, not by reading a palette.
+1. Ask (once, or take from the PRD and `01-ideas/`): who uses it and how often, two or three products they like or
+   compete with, the brand assets they have (logo, colors, fonts), and the one feeling the product should give
+   (calm and trustworthy, fast and dense, warm and friendly…).
+2. When impeccable is installed, run `/impeccable init` for PRODUCT.md first and let `/impeccable shape` inform the
+   directions.
+3. Make three directions that differ in more than color: type pairing and scale, density, shape language (sharp or
+   soft), color strategy (neutral with one accent, or brand-led), and how they treat the main screen's hierarchy.
+   Each is a draft DESIGN.md plus one rendered page of the product's most important screen with realistic
+   content, in `06-technical-docs/design/directions/<a|b|c>/`. None of them may fall into the design-quality
+   rule's "Avoid" list; read `patterns.md` for the screen type.
+4. Show the three side by side (screenshots at desktop and mobile width) with one line on each one's intent. The
+   user picks one or a mix; record the choice and why under Overview in DESIGN.md, then delete the others.
