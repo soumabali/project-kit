@@ -12,14 +12,16 @@
    repo root), and delete the `kit:` line.
 4. CLAUDE.md: copy `project-layer/CLAUDE.md`; replace `{{PROJECT_NAME}}`, `{{KIT_VERSION}}` (the plugin version),
    and the `{{APP_ROWS}}` and `{{COMMAND_ROWS}}` table rows. If AGENTS.md exists, put `@AGENTS.md` on the first line.
-5. Merge `project-layer/settings.json` into `.claude/settings.json`: add missing `permissions.deny` and
-   `permissions.ask` entries, and keep `Read(!.env.example)` last in `deny`. For `auto` autonomy, skip the ask
-   entries and add the deny entries of `project-layer/settings-auto.json` instead.
-6. Create `05-progress/STATUS.md` and `05-progress/log.md` from the templates, and `CHANGELOG.md` from
-   `changelog.md` if missing.
-7. Append the missing lines of the kit block to `.gitignore`: `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`,
-   `CLAUDE.local.md`, `.claude/settings.local.json`, `.worktrees/`, `.auth/`, `playwright-report/`, `test-results/`,
-   `blob-report/`, `coverage/`.
+5. Merge `project-layer/settings.json` into `.claude/settings.json`: add the missing `permissions.deny` entries
+   and keep `Read(!.env.example)` last in `deny`. (The kit adds no ask rules; the command guard hook asks instead.)
+6. Create `05-progress/STATUS.md` and `05-progress/log.md` from the templates, and, if missing, `CHANGELOG.md` from
+   `changelog.md` and `06-technical-docs/glossary.md` from `glossary.md`.
+7. Append the missing lines to `.gitignore` under a `# project-kit` line: `.env`, `.env.*`, `!.env.example`,
+   `.envrc`, `.dev.vars*`, `*.pem`, `*.key`, `*.p8`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `key.properties`,
+   `*.tfstate`, `*.tfstate.*`, `CLAUDE.local.md`, `.claude/settings.local.json`, `*.orig`, `.worktrees/`, `.auth/`,
+   `playwright-report/`, `test-results/`, `blob-report/`, `ui-verify/`, `coverage/`.
+8. Append to `.gitattributes` under a `# project-kit` line: `05-progress/log.md merge=union` and
+   `CHANGELOG.md merge=union`, so two branches that both add a line merge without a conflict.
 
 Without the manifest (`.claude/project-kit.json`), `/project-kit:sync` can't update these files later. Once Node is
 available, move any project rules out of the two kit blocks, delete the blocks from CLAUDE.md, and run

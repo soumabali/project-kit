@@ -15,7 +15,7 @@ paths:
 
 ## What "tested" means here
 - Unit tests cover domain and business logic, pure algorithms, state transitions, complex validation, and error
-  boundaries, with at least 80% line coverage there. Don't unit-test framework internals, generated code, simple
+  boundaries, with at least 80% line coverage there at production rigor (CLAUDE.md §2). Don't unit-test framework internals, generated code, simple
   passthroughs, or markup without logic; integration, E2E, and visual tests cover those.
 - Integration tests go through the real HTTP layer and a real database (docker compose service or Testcontainers);
   never mock your own ORM, repositories, or framework.
@@ -26,7 +26,7 @@ paths:
 - Every protected endpoint has negative tests: unauthenticated (401), expired or invalid token (401), another
   user's resource (403 or 404), wrong role (403), invalid input (422 or 400).
 - Mock only third-party services you don't control, at the network boundary (MSW, WireMock, `Http::fake`, httptest servers). Keep one contract or sandbox test per integration.
-- Designed screens get visual snapshots and an axe scan (`/project-kit:ui-verify` sets them up).
+- Designed screens get an axe scan and, at production rigor, visual snapshots (`/project-kit:ui-verify` sets them up).
 
 ## Writing tests
 - Test behavior through public interfaces, not implementation details. Names state the behavior: `rejects_booking_for_another_users_room`.

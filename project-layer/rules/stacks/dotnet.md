@@ -29,6 +29,8 @@ kit: {"name": "C# / .NET (ASP.NET Core)", "commands": {"setup": "dotnet restore"
   rate limiter (`AddRateLimiter`), and a named CORS policy with explicit origins.
 - Persist and protect Data Protection keys when running more than one instance.
 - Razor encodes output; `Html.Raw` never with user data.
+- SQL: LINQ, `FromSqlInterpolated`/`FromSql`, or parameters; never `FromSqlRaw`/`ExecuteSqlRaw` or Dapper with
+  concatenated input.
 
 ## Testing
 - xUnit or NUnit, whichever exists. Integration tests over HTTP with `WebApplicationFactory<Program>` and a real

@@ -1,8 +1,9 @@
 ---
 paths:
-  - "**/*.{tsx,jsx,vue,svelte,astro,html,css,scss,erb,cshtml,razor}"
+  - "**/*.{tsx,jsx,vue,svelte,astro,html,css,scss,erb,haml,slim,twig,jinja,j2,gohtml,tmpl,cshtml,razor}"
   - "**/*.blade.php"
-  - "**/lib/**/{screens,widgets,pages,views,ui,theme,components}/**/*.dart"
+  - "**/lib/**/{screens,widgets,pages,views,view,ui,theme,components}/**/*.dart"
+  - "**/*.arb"
   - "DESIGN.md"
   - "PRODUCT.md"
   - "06-technical-docs/design/**/*"
@@ -56,6 +57,6 @@ paths:
 
 ## Verify
 - New or changed screens pass `/project-kit:ui-verify`: screenshots at each breakpoint compared with the reference,
-  no axe violations, and visual baselines committed.
+  no axe violations, and, at production rigor (CLAUDE.md §2), visual baselines committed.
 - Performance: size and lazy-load images, subset fonts with `font-display: swap`, and prevent layout shift from
   late-loading content.

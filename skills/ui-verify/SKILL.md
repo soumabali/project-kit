@@ -38,7 +38,7 @@ Fix blockers and majors from both the fidelity review and the critique, recaptur
 specify, or a difference you believe is intentional, goes to the user as a question rather than a silent choice.
 
 ## 5. Lock it in
-- When the user accepts the screen, update visual baselines inside the official Playwright Docker image so they
+- At production rigor (CLAUDE.md §2), when the user accepts the screen, update visual baselines inside the official Playwright Docker image so they
   match CI (the e2e app's `npm run test:visual:update` script does this), and commit the `*-snapshots/` folders.
 - Record the result in the task file's **UI verification** line: screens, breakpoints, remaining minor
   differences. screens.md has no status column, so parallel task branches don't conflict on it.

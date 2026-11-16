@@ -4,11 +4,15 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // a file URL's pathname is not a path on Windows
 const KIT = path.join(root, 'scripts', 'kit.mjs');
 let failures = 0;
 const check = (cond, msg) => { if (!cond) { failures++; console.error(`    ${msg}`); } };
+// The kit keeps per-machine state (starters, approved quick checks) in its home folder; tests get their own.
+process.env.PROJECT_KIT_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-home-'));
+process.on('exit', () => fs.rmSync(process.env.PROJECT_KIT_HOME, { recursive: true, force: true }));
 const kit = (dir, ...args) => spawnSync(process.execPath, [KIT, ...args, '--project-dir', dir], { encoding: 'utf8' });
 const read = (dir, rel) => fs.readFileSync(path.join(dir, rel), 'utf8');
 const write = (dir, rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
@@ -620,6 +624,12 @@ const snapshot = (dir) => {
   const b = kit(d, 'board');
   check(/blocked 1/.test(b.stdout) && /needs the payment sandbox key/.test(b.stdout), `board: ${b.stdout}`);
   check(/task-001 in-progress → done/.test(read(d, '05-progress/log.md')), 'status changes are not logged');
+  // A free line in the log, and a task for an app that only the Profile table lists (a stack the kit has no rules for).
+  check(kit(d, 'log', 'quick: fix a typo on the pricing page').status === 0 && /^\d{4}-\d\d-\d\d \d\d:\d\d quick: fix a typo on the pricing page$/m.test(read(d, '05-progress/log.md')), 'log did not add the line');
+  check(kit(d, 'log').status === 2, 'log without text should be refused');
+  write(d, 'CLAUDE.md', read(d, 'CLAUDE.md').replace(/^(\| web \| `[^`]+` \|.*)$/m, '$1\n| ios | `apps/ios` | Swift | `.claude/rules/project/stack-swift.md` |'));
+  check(kit(d, 'new', 'task', '--title', 'Sign in on iOS', '--app', 'ios', '--dry-run').status === 0, 'an app listed only in the Profile table should be accepted');
+  check(kit(d, 'new', 'task', '--title', 'Nowhere', '--app', 'ghost', '--dry-run').status === 2, 'an unknown app should still be refused');
   // A title is text: "$1" and "$&" mean something to String.replace and must reach the heading unchanged.
   const money = kit(d, 'new', 'task', '--title', 'Charge $1 fee and $& too', '--app', 'web');
   const moneyFile = (money.stdout.match(/04-tasks\/\S+\.md/) || [''])[0];
@@ -644,6 +654,14 @@ const snapshot = (dir) => {
   check(/api\s+off/.test(kit(d, 'check').stdout), 'check --off did not turn it off');
   kit(d, 'check', 'api', '--cmd', 'node lint.js {file}', '--ext', 'go');
   check(JSON.parse(read(d, '.claude/project-kit.json')).checks.api.cmd === 'node lint.js {file}', 'check --cmd not saved');
+  // Setting a command approves it on this machine; on another one (a different home) it waits for --trust.
+  check(!/not approved/.test(kit(d, 'check').stdout), 'a command set here should be approved here');
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-home-'));
+  const elsewhere = (...a) => spawnSync(process.execPath, [KIT, ...a, '--project-dir', d], { encoding: 'utf8', env: { ...process.env, PROJECT_KIT_HOME: other } });
+  check(/api\s+node lint\.js \{file\}.*not approved on this machine/.test(elsewhere('check').stdout) && /not approved on this machine/.test(elsewhere('doctor').stdout), `a command from the repo should show as not approved: ${elsewhere('check').stdout}`);
+  check(elsewhere('check', 'api', '--trust').status === 0 && !/not approved/.test(elsewhere('check').stdout), 'check --trust did not approve the command');
+  check(elsewhere('check', 'web', '--trust').status === 2, 'check --trust on a built-in check should be refused');
+  fs.rmSync(other, { recursive: true, force: true });
   kit(d, 'check', 'api', '--reset');
   check(!('api' in JSON.parse(read(d, '.claude/project-kit.json')).checks), 'check --reset did not clear it');
   check(fs.existsSync(path.join(d, '.claude/rules/kit/stack-react-native.md')), 'React Native rule not installed');

@@ -7,7 +7,7 @@ Breakpoints: mobile 390×844 · tablet 768×1024 · desktop 1440×900 (override 
 
 | Id | Route | Purpose | States | Auth | Reference |
 |---|---|---|---|---|---|
-| home | `/` | | loading, empty, error, success | public | `references/home-desktop.png` |
+| home | `/` | | loading, empty, error, success | public | `references/home-1440.png` |
 
 Whether a screen is verified lives in the task that built or changed it (its **UI verification** line), so task
 branches never edit this table.

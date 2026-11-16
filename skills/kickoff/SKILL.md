@@ -84,7 +84,8 @@ Definition of Done. Along the way:
 ## 6. Close Phase 00
 - Run every command in the Profile; replace each `(verify)` with the confirmed command, or fix the setup.
 - Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" doctor` and resolve every FAIL.
-- Have `project-kit:test-reviewer` review the suites (phase Definition of Done), then mark the phase `done`.
+- At production rigor, have `project-kit:test-reviewer` review the suites (phase Definition of Done). Then mark
+  the phase `done`.
 - Set STATUS.md's next step to "brainstorm the first feature (superpowers brainstorming → 02-prd/)".
 - Ask the user whether to push the task branches and open pull requests or merge them locally.
 - Hand the user the repo settings checklist from phase-00.md (only they can change those).

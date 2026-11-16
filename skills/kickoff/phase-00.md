@@ -19,7 +19,8 @@ exactly like later tasks). Ask the user only for what the repo can't tell you.
   parts satisfy the matching groups below, so check them instead of rebuilding them. Otherwise scaffold with the
   official generator at the current stable or LTS version (look it up; don't assume). Commit the lockfile.
 - Confirm each app's quick check (`kit.mjs check` lists them) runs and is fast: save a file with a syntax error and
-  see the hook report it, or set a better command with `kit.mjs check <app> --cmd …`.
+  see the hook report it, or set a better command with `kit.mjs check <app> --cmd …` (teammates approve it once on
+  their machine with `kit.mjs check <app> --trust`).
 - Generate API types or a client for every app that calls the API from `06-technical-docs/api/openapi.yaml`
   (openapi-typescript or orval for TypeScript, openapi-generator for Dart and others), with a script that
   regenerates them.
@@ -48,7 +49,8 @@ exactly like later tasks). Ask the user only for what the repo can't tell you.
 
 ## 5. CI (GitHub Actions unless the repo uses something else)
 For every app, on every pull request and push to main: install from the lockfile (frozen) → format check → lint →
-type check → tests with coverage (fail below 80% of lines in domain logic, or the floor the user picks) → build →
+type check → tests with coverage (production rigor: fail below 80% of lines in domain logic, or the floor the user
+picks) → build →
 dependency audit (fail on high or critical) → secret scan (gitleaks) → migrations from an empty database plus a
 rollback of the newest (apps with a database) → E2E against the composed stack, uploading Playwright reports.
 Pin third-party actions to commit SHAs, set least-privilege `permissions:`, and cache dependencies.

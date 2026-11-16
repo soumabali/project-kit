@@ -1,8 +1,9 @@
 ---
 paths:
-  - "**/*.{tsx,jsx,vue,svelte,astro,html,css,scss,erb,cshtml,razor}"
+  - "**/*.{tsx,jsx,vue,svelte,astro,html,css,scss,erb,haml,slim,twig,jinja,j2,gohtml,tmpl,cshtml,razor}"
   - "**/*.blade.php"
-  - "**/lib/**/{screens,widgets,pages,views,ui,theme,components}/**/*.dart"
+  - "**/lib/**/{screens,widgets,pages,views,view,ui,theme,components}/**/*.dart"
+  - "**/*.arb"
   - "DESIGN.md"
   - "PRODUCT.md"
   - "06-technical-docs/design/**/*"

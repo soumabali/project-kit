@@ -9,7 +9,8 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" *)
 
 Every bookkeeping step runs through `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" <command>` (shortened to `kit`
 below). It picks global ids across branches, fills templates, keeps the phase table, STATUS.md lines (Updated,
-Active task, Branch, Queue), and log.md in step, and refuses inconsistent moves. Don't edit those by hand.
+Active task, Branch, Queue), and log.md in step, and refuses a start on a dirty tree and a block without a reason. Don't edit those by hand.
+`kit log "<text>"` adds a line that belongs to no status change (a quick-lane fix, a decision, a gate result).
 
 ## Pick
 - `kit next`: the next ready task (status `todo`, every dependency `done`; hotfixes first). `kit board` shows all

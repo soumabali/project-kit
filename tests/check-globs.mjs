@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // a file URL's pathname is not a path on Windows
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-globs-'));
 const run = spawnSync(process.execPath, [path.join(root, 'scripts', 'kit.mjs'), 'install', '--project-dir', tmp, '--name', 'Globs',
   '--app', 'api=laravel:07-application/api', '--app', 'web=nextjs:07-application/web', '--app', 'shop=nuxt:07-application/shop',
@@ -87,6 +88,15 @@ const cases = {
   '07-application/api/Dockerfile': ['infra'],
   'infra/main.tf': ['infra'],
   '.github/workflows/ci.yml': ['infra'],
+  // A front-end file route is not an API; NestJS controllers and entities are; other CI systems are infrastructure.
+  '07-application/spa/src/routes/index.tsx': ['design-quality', 'security', 'stack-vite-spa', 'ui-ux'],
+  '07-application/agent/src/bookings/bookings.controller.ts': ['api', 'security', 'stack-mcp', 'stack-node-typescript'],
+  '07-application/agent/src/bookings/booking.entity.ts': ['database', 'security', 'stack-mcp', 'stack-node-typescript'],
+  '07-application/mobile/lib/counter/view/counter_page.dart': ['security', 'stack-flutter', 'design-quality', 'ui-ux'],
+  '07-application/mobile/lib/l10n/app_en.arb': ['design-quality', 'ui-ux'],
+  '07-application/py/templates/home.jinja': ['design-quality', 'security', 'stack-python', 'ui-ux'],
+  'Jenkinsfile': ['infra'],
+  '.circleci/config.yml': ['infra'],
   '02-prd/prd-booking-v1.md': [],
   '05-progress/STATUS.md': [],
 };

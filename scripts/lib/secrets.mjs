@@ -32,11 +32,17 @@ const PATTERNS = [
   /cio[0-9A-Za-z]{32}/g, // crates.io API token
   /APP_KEY=base64:[A-Za-z0-9+/]{40,}/g,
   /aws_?secret_?(access_?)?key["']?\s*[:=]\s*["']?[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])/gi, // in any case, as in ~/.aws/credentials
-  /(^|[^A-Za-z0-9_])[A-Z0-9_]*(SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=["']?[A-Za-z0-9+/_.=-]{20,}/g,
+  /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, // JSON Web Token
   /[a-z][a-z0-9+.-]*:\/\/[^/:@ "'`]+:[^/@ "'`$]{6,}@[^ "'`/:]+/g,
 ];
+// Named values (JWT_SECRET=…, api_key: "…"). A long value alone is not a secret (a header name, a dotted path, a
+// number), so these count only when the value mixes letters and digits, as generated credentials do.
+const NAMED = [
+  /(^|[^A-Za-z0-9_])[A-Z0-9_]*(SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=["']?([A-Za-z0-9+/_.=-]{20,})/g,
+  /(^|[^A-Za-z0-9])[A-Za-z0-9_-]*(secret|password|passwd|token|api[_-]?key|private[_-]?key)["']?\s*[:=]\s*["']([A-Za-z0-9+/_=-]{20,})["']/gi,
+];
 // Placeholders, documented example keys, and local development URLs are not secrets.
-const NOT_SECRET = /example|your|xxxx|placeholder|changeme|change_me|dummy|redacted|<[a-z_-]+>|@(localhost|127\.0\.0\.1|db|postgres|mysql|mariadb|redis|mongo|database)$/i;
+const NOT_SECRET = /example|your|xxxx|placeholder|changeme|change_me|dummy|redacted|eyJzdWIiOiIxMjM0NTY3ODkw|<[a-z_-]+>|@(localhost|127\.0\.0\.1|db|postgres|mysql|mariadb|redis|mongo|database)$/i;
 
 // The text a tool call would write or run.
 export function writtenText(toolInput) {
@@ -54,6 +60,13 @@ export function findSecret(text) {
   for (const re of PATTERNS) {
     re.lastIndex = 0;
     for (const m of flat.matchAll(re)) if (!NOT_SECRET.test(m[0])) return 'the new content contains what looks like a real credential';
+  }
+  for (const re of NAMED) {
+    re.lastIndex = 0;
+    for (const m of flat.matchAll(re)) {
+      const value = m[m.length - 1];
+      if (/[0-9]/.test(value) && /[A-Za-z]/.test(value) && !NOT_SECRET.test(m[0])) return 'the new content contains what looks like a real credential';
+    }
   }
   return '';
 }

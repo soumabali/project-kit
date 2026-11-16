@@ -37,10 +37,10 @@ before the other tasks start, so a misunderstanding costs a day, not a phase.
 
 ## Definition of Done
 - [ ] Every task is `done` or `cancelled` with a reason
-- [ ] `project-kit:test-reviewer` judged the phase's E2E and integration suites sufficient
+- [ ] Production rigor: `project-kit:test-reviewer` judged the phase's E2E and integration suites sufficient
 - [ ] The full end-to-end suite is green against staging, and the demo below runs there (Phase 00: green in CI
       against the composed stack, since staging may not exist yet)
-- [ ] Designed screens pass `/project-kit:ui-verify`; visual baselines are committed
+- [ ] Designed screens pass `/project-kit:ui-verify` (standard and production); visual baselines are committed (production)
 - [ ] `[Unreleased]` in CHANGELOG.md covers the phase
 - [ ] Architecture, data model, API spec, DESIGN.md, and runbook are current
 - [ ] The user signed off

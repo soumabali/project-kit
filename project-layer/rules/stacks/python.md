@@ -3,7 +3,7 @@ paths:
   - "{{APP}}/**/*.py"
   - "{{APP}}/**/*.{html,jinja,j2}"
   - "{{APP}}/pyproject.toml"
-kit: {"name": "Python (Django, FastAPI, Flask)", "commands": {"setup": "uv sync", "dev": "uv run fastapi dev", "test": "uv run pytest", "testOne": "uv run pytest -k <name>", "lint": "uv run ruff check . && uv run ruff format --check .", "types": "uv run mypy .", "audit": "uv run pip-audit"}, "check": {"ext": "py", "cmd": "ruff check {file}", "requires": "ruff"}}
+kit: {"name": "Python (Django, FastAPI, Flask)", "commands": {"setup": "uv sync", "dev": "uv run fastapi dev", "test": "uv run pytest", "testOne": "uv run pytest -k <name>", "lint": "uv run ruff check . && uv run ruff format --check .", "types": "uv run mypy .", "audit": "uv run pip-audit"}, "check": {"ext": "py", "cmd": "ruff check --force-exclude {file}", "requires": "ruff"}}
 ---
 
 # Stack: Python (Django, FastAPI, Flask)

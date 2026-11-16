@@ -38,5 +38,5 @@ record, `05-progress/releases/v<version>.md`: create it first, then add each che
   and latency for the agreed window. Mobile: submit store builds to internal or beta tracks before production.
 
 ## 5. Record
-Finish the release record (versions deployed, times, smoke results, rollback plan), append one line to
-`05-progress/log.md`, update STATUS.md, and update the runbook if the process changed.
+Finish the release record (versions deployed, times, smoke results, rollback plan), add one line to
+`05-progress/log.md` (`node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" log "release v<version>: …"`), update STATUS.md, and update the runbook if the process changed.

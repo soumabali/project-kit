@@ -5,6 +5,11 @@ paths:
   - "**/*.dockerfile"
   - ".github/**/*"
   - ".gitlab-ci.yml"
+  - "**/Jenkinsfile"
+  - ".circleci/**/*"
+  - "azure-pipelines.yml"
+  - "bitbucket-pipelines.yml"
+  - "**/.dockerignore"
   - "**/*.{tf,tfvars}"
   - "**/{k8s,kubernetes,helm,charts,deploy,infra}/**/*.{yml,yaml}"
 ---
