@@ -40,7 +40,10 @@ const onPath = name => (process.env.PATH || '').split(path.delimiter).some(dir =
   .some(e => { try { return fs.statSync(path.join(dir, name + e)).isFile(); } catch { return false; } }));
 if (check.requires && !(String(check.requires).includes('/') ? fs.existsSync(path.join(appDir, check.requires)) : onPath(check.requires))) process.exit(0);
 
-const fileArg = JSON.stringify(path.relative(appDir, abs).split(path.sep).join('/'));
+// Quoted for the shell that runs the check. sh: single quotes, where nothing expands, so a route file such as
+// $postId.tsx stays itself and a file name can't run a command. cmd.exe: double quotes (a name can't hold one).
+const relFile = path.relative(appDir, abs).split(path.sep).join('/');
+const fileArg = process.platform === 'win32' ? `"${relFile}"` : `'${relFile.replace(/'/g, "'\\''")}'`;
 const cmd = check.cmd.split('{file}').join(fileArg);
 const r = spawnSync(cmd, { cwd: appDir, shell: true, encoding: 'utf8', timeout: 20000, maxBuffer: 1 << 20 });
 if (r.error || r.signal || r.status === 0 || r.status === 127) process.exit(0);

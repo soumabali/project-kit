@@ -18,6 +18,7 @@ const cases = [
   ['RSA private key', 'block', j('-----BEGIN RSA ', 'PRIVATE KEY-----\n', r(64), '\n-----END RSA PRIVATE KEY-----')],
   ['PGP private key block', 'block', j('-----BEGIN PGP ', 'PRIVATE KEY BLOCK-----\n\n', r(64))],
   ['Stripe live secret', 'block', j('sk_', 'live_', r(24))],
+  ['AWS secret access key in a credentials file', 'block', j('aws_secret_', 'access_key = ', r(40))],
   ['Stripe webhook secret', 'block', j('wh', 'sec_', r(32))],
   ['Anthropic key', 'block', j('sk-', 'ant-api03-', r(40))],
   ['OpenAI project key', 'block', j('sk-', 'proj-', r(40))],

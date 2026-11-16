@@ -856,7 +856,10 @@ function cmdRigor(args) {
 }
 
 // ---------- task files: create, start, move, pick ----------
-const TASK_FILE = /^(task|hotfix)-(\d{3})(?:-[\w.-]+)?\.md$/;
+// Ids are three digits, and simply grow past 999; they sort by number, so task-1000 comes after task-999.
+const TASK_FILE = /^(task|hotfix)-(\d{3,})(?:-[\w.-]+)?\.md$/;
+const TASK_ID = /^(task|hotfix)-\d{3,}$/;
+const byId = (a, b) => a.localeCompare(b, 'en', { numeric: true });
 function slugOf(title) { return String(title).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'item'; }
 function parseValue(raw) {
   const v = raw.trim();
@@ -902,10 +905,10 @@ function listTasks(root) {
       phase: fm.phase || '', type: fm.type || '', depends_on: Array.isArray(fm.depends_on) ? fm.depends_on : [],
       blocked_reason: fm.blocked_reason || null, security_sensitive: fm.security_sensitive === true,
     };
-  }).sort((a, b) => a.id.localeCompare(b.id));
+  }).sort((a, b) => byId(a.id, b.id));
 }
 function findTask(root, id) {
-  if (!/^(task|hotfix)-\d{3}$/.test(String(id))) fail(`give a task id such as task-007 or hotfix-002 (got "${id || ''}")`);
+  if (!TASK_ID.test(String(id))) fail(`give a task id such as task-007 or hotfix-002 (got "${id || ''}")`);
   const t = listTasks(root).find(x => x.id === id);
   if (!t) fail(`no task file for ${id} under 04-tasks/`);
   return t;
@@ -913,14 +916,14 @@ function findTask(root, id) {
 function gitOut(root, ...a) { const r = spawnSync('git', a, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; }
 // One above the highest id in the folders and anywhere in git history, since other branches may hold newer ones.
 function nextNumber(root, prefix, dirs) {
-  const re = new RegExp(`(?:^|/)${prefix}-(\\d{2,3})`);
+  const re = new RegExp(`(?:^|/)${prefix}-(\\d{2,})`);
   const names = dirs.flatMap(d => walkMd(path.join(root, d)).map(f => posix(path.relative(root, f))));
   const logged = gitOut(root, 'log', '--all', '--format=', '--name-only', '--', ...dirs);
   if (logged) names.push(...logged.split('\n'));
   return names.reduce((max, n) => { const m = n.match(re); return m ? Math.max(max, Number(m[1])) : max; }, 0) + 1;
 }
 const isReady = (t, byId) => t.status === 'todo' && t.depends_on.every(d => byId.get(d) && byId.get(d).status === 'done');
-const order = (a, b) => (a.id.startsWith('hotfix') === b.id.startsWith('hotfix') ? a.phase.localeCompare(b.phase) || a.id.localeCompare(b.id) : a.id.startsWith('hotfix') ? -1 : 1);
+const order = (a, b) => (a.id.startsWith('hotfix') === b.id.startsWith('hotfix') ? byId(a.phase, b.phase) || byId(a.id, b.id) : a.id.startsWith('hotfix') ? -1 : 1);
 function readyTasks(tasks) { const byId = new Map(tasks.map(t => [t.id, t])); return tasks.filter(t => isReady(t, byId)).sort(order); }
 function templateText(root, name) {
   const own = path.join(root, TEMPLATES_DIR, name);
@@ -928,7 +931,7 @@ function templateText(root, name) {
 }
 function activePhase(root) {
   const phases = walkMd(path.join(root, '03-phases')).map(f => ({ f, fm: frontMatterOf(textOf(f)) })).filter(p => /^phase-\d+$/.test(p.fm.id || ''));
-  const active = phases.find(p => p.fm.status === 'active') || phases.filter(p => p.fm.status === 'planned').sort((a, b) => a.fm.id.localeCompare(b.fm.id))[0];
+  const active = phases.find(p => p.fm.status === 'active') || phases.filter(p => p.fm.status === 'planned').sort((a, b) => byId(a.fm.id, b.fm.id))[0];
   return active ? active.fm.id : null;
 }
 const mainCheckout = root => isDir(path.join(root, '.git'));
@@ -965,12 +968,12 @@ function cmdNew(args) {
     id = args.phase || `phase-${String(nextNumber(root, 'phase', ['03-phases'])).padStart(2, '0')}`;
     rel = `03-phases/${id}-${slugOf(title)}.md`;
     text = setFields(templateText(root, 'phase.md'), { id, title, status: 'planned', created: date, updated: date })
-      .replace(/^# phase-\d+: .*$/m, `# ${id}: ${title}`);
+      .replace(/^# phase-\d+: .*$/m, () => `# ${id}: ${title}`); // a function, so "$1" in a title stays text
   } else if (kind === 'adr') {
     id = `ADR-${String(nextNumber(root, 'ADR', ['06-technical-docs/decisions'])).padStart(3, '0')}`;
     rel = `06-technical-docs/decisions/${id}-${slugOf(title)}.md`;
     text = setFields(templateText(root, 'adr.md'), { id, status: 'proposed', date })
-      .replace(/^# ADR-\d+: .*$/m, `# ${id}: ${title}`);
+      .replace(/^# ADR-\d+: .*$/m, () => `# ${id}: ${title}`);
   } else {
     const prefix = kind;
     id = `${prefix}-${String(nextNumber(root, prefix, ['04-tasks'])).padStart(3, '0')}`;
@@ -983,12 +986,12 @@ function cmdNew(args) {
     const type = args.type || (kind === 'hotfix' ? 'fix' : 'feat');
     if (!['feat', 'fix', 'refactor', 'test', 'docs', 'chore'].includes(type)) fail(`bad --type "${type}"`);
     const depends = String(args.depends || '').split(',').map(x => x.trim()).filter(Boolean);
-    for (const d of depends) if (!/^(task|hotfix)-\d{3}$/.test(d)) fail(`bad --depends entry "${d}"`);
+    for (const d of depends) if (!TASK_ID.test(d)) fail(`bad --depends entry "${d}"`);
     rel = `04-tasks/${phase}/${id}-${slugOf(title)}.md`;
     text = setFields(templateText(root, 'task.md'), {
       id, type, title, phase, app, status: 'todo', security_sensitive: Boolean(args.security), ui: Boolean(args.ui),
       depends_on: depends, created: date, updated: date, owner: 'claude',
-    }).replace(/^# (task|hotfix)-\d+: .*$/m, `# ${id}: ${title}`);
+    }).replace(/^# (task|hotfix)-\d+: .*$/m, () => `# ${id}: ${title}`);
     // The phase's task table gets the row (status lives only in the task file).
     const phaseFile = walkMd(path.join(root, '03-phases')).find(f => path.basename(f).startsWith(`${phase}-`) || path.basename(f) === `${phase}.md`);
     if (phaseFile && !isLink(phaseFile)) {
@@ -997,7 +1000,7 @@ function cmdNew(args) {
       if (h !== -1) {
         let end = h + 2;
         while (end < lines.length && lines[end].startsWith('|')) end++;
-        const rows = lines.slice(h + 2, end).filter(l => !/^\|\s*task-\d{3}\s*\|\s*\|/.test(l));
+        const rows = lines.slice(h + 2, end).filter(l => !/^\|\s*task-\d{3,}\s*\|\s*\|/.test(l));
         rows.push(`| ${id} | ${title.replace(/\|/g, '\\|')} | ${app} | ${depends.join(', ')} |`);
         lines.splice(h + 2, end - h - 2, ...rows);
         w.write(posix(path.relative(root, phaseFile)), lines.join('\n'), 'updated', eolOf(phaseFile));
@@ -1033,7 +1036,7 @@ function cmdStart(args) {
   const byId = new Map(listTasks(root).map(x => [x.id, x]));
   const waiting = t.depends_on.filter(d => !byId.get(d) || byId.get(d).status !== 'done');
   if (waiting.length) console.log(`note: ${id} depends on ${waiting.map(d => `${d} (${byId.get(d) ? byId.get(d).status : 'missing'})`).join(', ')}; cut its branch from the branch of the unmerged one`);
-  const branch = `${id}-${slugOf(path.basename(t.file, '.md').replace(/^(task|hotfix)-\d{3}-?/, '') || t.title)}`;
+  const branch = `${id}-${slugOf(path.basename(t.file, '.md').replace(/^(task|hotfix)-\d{3,}-?/, '') || t.title)}`;
   const inGit = gitOut(root, 'rev-parse', '--is-inside-work-tree') === 'true';
   if (inGit && !args['dry-run']) {
     const current = gitOut(root, 'branch', '--show-current');

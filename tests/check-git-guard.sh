@@ -48,12 +48,17 @@ cases() {
   expect 2 'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m wip'
   expect 2 'git config core.hooksPath /dev/null'
   expect 2 'git config --unset core.hooksPath'
+  expect 2 'git config unset core.hooksPath'
   # Ordinary commands and messages that only mention the flags
   expect 0 "$HEREDOC_MSG"
   expect 0 "git commit -F - <<'EOF'${NL}mention git push -f and HUSKY=0 here${NL}EOF"
   expect 0 'git commit -m "docs: explain the -n flag"'
   expect 0 "git commit -m 'remove --no-verify and git push -f from scripts'"
   expect 0 'git commit -mn'
+  # -u and -S take their value in the same word, so its letters are not flags
+  expect 0 'git commit -uno -m "wip"'
+  expect 0 'git commit -Sjohn@example.com -m "signed"'
+  expect 2 'git commit -nuno -m "wip"'
   expect 0 'git commit --amend --no-edit'
   expect 0 'git push -u origin task-001-login'
   expect 0 'git push origin feature-f'

@@ -38,7 +38,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - run: npm install -g "@anthropic-ai/claude-code@$(grep -oE 'CLAUDE_CODE_VERSION:[[:space:]]*"?[0-9.]+' .github/workflows/ci.yml | grep -oE '[0-9.]+$')"
+      # The same Claude Code version the self-test pins in ci.yml; fails rather than install an unpinned one.
+      - run: |
+          version="$(grep -oE 'claude-code@[0-9]+\.[0-9]+\.[0-9]+' .github/workflows/ci.yml | head -n 1 | cut -d@ -f2)"
+          [ -n "$version" ] || { echo "no pinned claude-code version found in ci.yml"; exit 1; }
+          npm install -g "@anthropic-ai/claude-code@$version"
       - run: claude plugin eval .
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

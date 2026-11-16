@@ -206,7 +206,7 @@ function checkGit(w, state) {
   // Pointing core.hooksPath at nothing, or unsetting it, turns the project's hooks off for every later command.
   if (sub === 'config') {
     for (let m = k + 1; m < nw; m++) if (hookpath(w[m])) {
-      for (let q = k + 1; q < m; q++) if (w[q].startsWith('--unset')) return "unsetting core.hooksPath turns the project's hooks off";
+      for (let q = k + 1; q < m; q++) if (w[q].startsWith('--unset') || w[q] === 'unset') return "unsetting core.hooksPath turns the project's hooks off";
       if (m < nw - 1 && (w[m + 1] === '' || /^(\/dev\/null|nul)$/i.test(w[m + 1]))) return "pointing core.hooksPath at nothing turns the project's hooks off";
     }
     return '';
@@ -228,6 +228,8 @@ function checkGit(w, state) {
     if (word.startsWith('-') && word.length > 1) {
       for (let q = 1; q < word.length; q++) {
         const ch = word[q];
+        // -S and -u take an optional value in the same word (-Skeyid, -uno): the rest of the cluster is that value.
+        if (sub === 'commit' && (ch === 'S' || ch === 'u')) break;
         if (sub === 'commit' && ch === 'n') return 'git commit -n skips the format check and secret scan';
         if (sub === 'push' && ch === 'f') return FORCE;
         // An option that takes a value ends the cluster; the value is the rest of it, or the next word.
@@ -246,17 +248,65 @@ function toRegex(glob) {
   const body = (trailing ? glob.slice(0, -2) : glob).split('*').map(esc).join('.*');
   return new RegExp(`^${body}${trailing ? '( .*)?' : ''}$`, 'is');
 }
+// Wrappers that run the command after them, with their options that take a value.
+const WRAPPERS = {
+  sudo: 'ughpCDRTU', doas: 'uC', env: 'uCS', command: '', builtin: '', exec: 'a', time: '', nohup: '', nice: 'n',
+  xargs: 'IinPLsEda',
+};
+const GIT_VALUE_OPTS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--super-prefix', '--config-env', '--exec-path'];
+
+// The forms a pattern is tried against: the command as written, without its VAR=value prefix, without wrappers
+// (sudo, env, xargs, ...), and in the spelling the patterns use: git without its global options (git -C api reset
+// --hard is git reset --hard), and rm with its recursive and force flags, however they are written, as rm -rf.
+function forms(w) {
+  const out = [w];
+  let i = 0;
+  while (i < w.length && isAssign(w[i])) i++;
+  if (i) out.push(w.slice(i));
+  let j = i;
+  for (let n = 0; n < 6 && j < w.length; n++) {
+    const takes = WRAPPERS[basename(w[j])];
+    if (takes === undefined) break;
+    let k = j + 1;
+    for (; k < w.length; k++) {
+      if (isAssign(w[k])) continue;
+      if (!w[k].startsWith('-') || w[k] === '-' || w[k] === '--') break;
+      if (!w[k].startsWith('--') && w[k].length === 2 && takes.includes(w[k][1])) k++;
+    }
+    if (k < w.length && w[k] === '--') k++;
+    j = k;
+  }
+  if (j >= w.length) return out;
+  let base = w.slice(j);
+  if (j > i) out.push(base);
+  const first = basename(base[0]).replace(/\.exe$/, '');
+  if (first === 'git') {
+    let k = 1;
+    for (; k < base.length && base[k].startsWith('-'); k++) if (GIT_VALUE_OPTS.includes(base[k])) k++;
+    if (k > 1 && k < base.length) out.push(['git', ...base.slice(k)]);
+  } else if (first === 'rm') {
+    let recursive = false, force = false, k = 1;
+    const rest = [];
+    for (; k < base.length; k++) {
+      const x = base[k];
+      if (x === '--') { rest.push(...base.slice(k + 1)); break; }
+      if (x === '--recursive') recursive = true;
+      else if (x === '--force') force = true;
+      else if (x.startsWith('-') && !x.startsWith('--') && x.length > 1) { if (/[rR]/.test(x)) recursive = true; if (x.includes('f')) force = true; }
+      else if (!x.startsWith('-')) rest.push(x);
+    }
+    if (recursive && force) out.push(['rm', '-rf', ...rest]);
+  }
+  return out;
+}
+
 const cache = new Map();
 export function matchPattern(src, patterns) {
-  const cmds = simpleCommands(src);
+  const cmds = simpleCommands(src).flatMap(forms).map(w => w.join(' '));
   for (const p of patterns) {
     if (!cache.has(p)) cache.set(p, toRegex(p));
     const re = cache.get(p);
-    for (const w of cmds) {
-      let i = 0;
-      while (i < w.length && isAssign(w[i])) i++;
-      if (re.test(w.join(' ')) || (i && re.test(w.slice(i).join(' ')))) return p;
-    }
+    if (cmds.some(c => re.test(c))) return p;
   }
   return '';
 }

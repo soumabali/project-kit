@@ -35,6 +35,14 @@ for (const c of ['rm -rf node_modules', 'php artisan migrate:fresh --seed', 'FOO
   'bash -c "docker compose down -v"', 'git push -u origin task-001', 'printenv', 'env', 'Remove-Item -Path x -Recurse -Force', 'echo $(git reset --hard)']) {
   check(guard(c) === 'ask', `guarded should ask: ${c} → ${guard(c)}`);
 }
+// The same commands behind a wrapper, with git's global options, or with rm's flags written another way.
+for (const c of ['sudo rm -rf /var/app', 'sudo -u deploy rm -rf releases', 'rm -rfv build', 'rm -f -r build', 'rm --recursive --force build', 'rm -fR -- build',
+  'find . -name "*.tmp" | xargs -n 1 rm -rf', 'git -C api reset --hard', 'git --no-pager -c color.ui=false clean -fd', 'time git reset --hard', 'env FOO=1 rm -rf dist']) {
+  check(guard(c) === 'ask', `guarded should ask: ${c} → ${guard(c)}`);
+}
+for (const c of ['rm -f notes.txt', 'rm -r empty-dir', 'command -v rm', 'sudo apt-get install -y jq', 'git -C api status', 'env FOO=1 node server.js', 'xargs -n 1 echo']) {
+  check(guard(c) === 'allow', `guarded should allow: ${c} → ${guard(c)}`);
+}
 for (const c of ['npm test', 'echo "rm -rf is dangerous"', 'git commit -m "explain rm -rf"', 'ls -la', 'environment-check', 'git status']) {
   check(guard(c) === 'allow', `guarded should allow: ${c} → ${guard(c)}`);
 }
@@ -63,6 +71,14 @@ const edit = (file, content) => {
 let r = edit('api/a.txt', 'BAD line');
 check(r.status === 2 && /lint: BAD found/.test(r.stderr), `a failing quick check should exit 2 with its output: ${r.status} ${r.stderr}`);
 check(edit('api/a.txt', 'fine').status === 0, 'a passing quick check should be silent');
+// The file name reaches the check as written: "$" (a route file such as $postId.tsx) and "$(…)" are not expanded.
+if (process.platform !== 'win32') {
+  check(edit('api/$postId.txt', 'fine').status === 0, 'a file name with $ should reach the quick check unchanged');
+  r = edit('api/$postId.txt', 'BAD line');
+  check(r.status === 2 && /lint: BAD found/.test(r.stderr), `a failing file with $ in its name should be reported: ${r.status} ${r.stderr}`);
+  check(edit('api/$(touch PWNED).txt', 'fine').status === 0 && !fs.existsSync(path.join(proj, 'api', 'PWNED')), 'a file name must not run as a command in the quick check');
+  check(edit("api/it's.txt", 'fine').status === 0, 'a file name with a quote should reach the quick check');
+}
 check(edit('api/a.md', 'BAD').status === 0, 'a file type the check does not cover should be skipped');
 check(edit('notes.txt', 'BAD').status === 0, 'a file outside every app should be skipped');
 manifest({ apps: [{ name: 'api', stacks: ['go'], path: 'api' }], checks: { api: { cmd: 'definitely-not-a-tool {file}', ext: 'txt', requires: 'definitely-not-a-tool' } } });

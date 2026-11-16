@@ -620,6 +620,18 @@ const snapshot = (dir) => {
   const b = kit(d, 'board');
   check(/blocked 1/.test(b.stdout) && /needs the payment sandbox key/.test(b.stdout), `board: ${b.stdout}`);
   check(/task-001 in-progress → done/.test(read(d, '05-progress/log.md')), 'status changes are not logged');
+  // A title is text: "$1" and "$&" mean something to String.replace and must reach the heading unchanged.
+  const money = kit(d, 'new', 'task', '--title', 'Charge $1 fee and $& too', '--app', 'web');
+  const moneyFile = (money.stdout.match(/04-tasks\/\S+\.md/) || [''])[0];
+  check(money.status === 0 && /^# task-\d+: Charge \$1 fee and \$& too$/m.test(read(d, moneyFile)), `a title with $1 was rewritten: ${money.stdout}${money.stderr}`);
+  // Ids grow past 999 and keep their order: task-1000 is seen, sorted after task-999, and followed by task-1001.
+  write(d, '04-tasks/phase-01/task-999-last-three-digit.md', read(d, moneyFile).replace(/^id: .*$/m, 'id: task-999'));
+  const k = kit(d, 'new', 'task', '--title', 'Past the thousand', '--app', 'web');
+  check(/Created task-1000:/.test(k.stdout), `the id after task-999 should be task-1000: ${k.stdout}${k.stderr}`);
+  const ids = JSON.parse(kit(d, 'board', '--json').stdout).map(t => t.id);
+  check(ids.indexOf('task-1000') === ids.indexOf('task-999') + 1, `task-1000 should be listed after task-999: ${ids.join()}`);
+  check(/task-1001/.test(kit(d, 'new', 'task', '--title', 'Next', '--app', 'web', '--depends', 'task-1000', '--dry-run').stdout), 'the id after task-1000 should be task-1001');
+  check(kit(d, 'set', 'task-1000', 'backlog').status === 0, 'a four-digit task id should be accepted');
   fs.rmSync(d, { recursive: true, force: true });
 }
 
