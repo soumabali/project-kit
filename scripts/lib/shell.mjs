@@ -241,12 +241,16 @@ function checkGit(w, state) {
 }
 
 // ---------- permission-style patterns ("git push *", "*migrate:fresh*") against each simple command ----------
-function toRegex(glob) {
+// A pattern that starts with "case:" keeps the case of its letters (git branch -D deletes unmerged work, -d doesn't).
+const CASE = 'case:';
+function toRegex(pattern) {
+  const exact = pattern.startsWith(CASE);
+  const glob = exact ? pattern.slice(CASE.length) : pattern;
   const esc = s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
   // "cmd *" also matches "cmd" with no arguments, as Claude Code's permission rules do.
   const trailing = glob.endsWith(' *');
   const body = (trailing ? glob.slice(0, -2) : glob).split('*').map(esc).join('.*');
-  return new RegExp(`^${body}${trailing ? '( .*)?' : ''}$`, 'is');
+  return new RegExp(`^${body}${trailing ? '( .*)?' : ''}$`, exact ? 's' : 'is');
 }
 // Wrappers that run the command after them, with their options that take a value.
 const WRAPPERS = {
@@ -259,6 +263,19 @@ const GIT_VALUE_OPTS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '
 // (sudo, env, xargs, ...), and in the spelling the patterns use: git without its global options (git -C api reset
 // --hard is git reset --hard), and rm with its recursive and force flags, however they are written, as rm -rf.
 function forms(w) {
+  return rawForms(w).map(f => (takesProse(f) ? f.map(x => (/\s/.test(x) ? '…' : x)) : f));
+}
+// Commands whose quoted arguments are text for people (a commit message, a pull request body, an echoed line): a
+// phrase inside one, such as "terraform apply", is not a command. `gh pr merge` itself still matches.
+const PROSE_GIT = ['commit', 'tag', 'notes', 'stash', 'merge'];
+function takesProse(f) {
+  let i = 0;
+  while (i < f.length && isAssign(f[i])) i++;
+  const first = basename(f[i] || '').replace(/\.exe$/, '');
+  if (['echo', 'printf', 'gh', 'write-host', 'write-output'].includes(first)) return true;
+  return first === 'git' && f.slice(i + 1).some(x => PROSE_GIT.includes(x));
+}
+function rawForms(w) {
   const out = [w];
   let i = 0;
   while (i < w.length && isAssign(w[i])) i++;
@@ -306,7 +323,7 @@ export function matchPattern(src, patterns) {
   for (const p of patterns) {
     if (!cache.has(p)) cache.set(p, toRegex(p));
     const re = cache.get(p);
-    if (cmds.some(c => re.test(c))) return p;
+    if (cmds.some(c => re.test(c))) return p.startsWith(CASE) ? p.slice(CASE.length) : p;
   }
   return '';
 }

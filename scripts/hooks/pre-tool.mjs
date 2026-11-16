@@ -3,7 +3,7 @@
 // 1. Secret guard (everywhere): blocks a call whose new content or command holds what looks like a real credential.
 // 2. Git guard (everywhere): blocks force-pushes and skipped hooks in the forms permission rules can't see.
 // 3. Command guard (project-kit projects): asks before destructive commands in guarded autonomy; in auto autonomy
-//    lets them run and denies commands that print secrets or change remote infrastructure.
+//    lets them run and denies commands that print secrets, change remote infrastructure, publish, deploy, or merge.
 // Exit 2 blocks the call and shows stderr to Claude; a JSON permission decision asks or denies.
 import path from 'node:path';
 import { readStdin, readJson, findProject, autonomyOf, PLUGIN_ROOT } from '../lib/project.mjs';
@@ -46,7 +46,7 @@ const decide = (decision, reason) => {
 };
 const unattended = matchPattern(cmd, rules.unattended || []);
 if (unattended && mode === 'auto') {
-  decide('deny', `project-kit (autonomy auto, from ${why}) denies "${unattended}": it prints secrets or changes remote infrastructure, and nobody is watching. Leave it for the user: note it in the task file and continue with other work.`);
+  decide('deny', `project-kit (autonomy auto, from ${why}) denies "${unattended}": it prints secrets, changes remote infrastructure, publishes, deploys, or merges, and nobody is watching. Leave it for the user: note it in the task file and continue with other work.`);
 }
 const risky = unattended || (mode === 'guarded' ? matchPattern(cmd, rules.ask || []) : '');
 if (risky && mode === 'guarded') {
